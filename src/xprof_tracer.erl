@@ -24,7 +24,8 @@
 -record(state, {trace_spec  = all,   %% trace specification
                 paused      = true,  %% tracing paused?
                 overflow    = false, %% tracing is paused because of overflow?
-                funs        = []     %% functions monitored by xprof
+                funs        = [],    %% functions monitored by xprof
+                node                 %% node to trace on
                }).
 
 %% @doc Starts xprof tracer process.
@@ -72,8 +73,9 @@ trace_status() ->
 %% gen_server callbacks
 
 init([]) ->
-    init_tracer(),
-    {ok, #state{}}.
+    Node = application:get_env(xprof, node, node()),
+    init_tracer(Node),
+    {ok, #state{node = Node}}.
 
 handle_call({monitor, MFA}, _From, State) ->
     case get({handler, MFA}) of
@@ -84,12 +86,12 @@ handle_call({monitor, MFA}, _From, State) ->
             put({handler, MFA}, Pid),
 
             MatchSpec = [{'_', [], [{return_trace}]}],
-            erlang:trace_pattern(MFA, MatchSpec, [local]),
+            trace_pattern(State#state.node, MFA, MatchSpec, [local]),
 
             {reply, ok, State#state{funs=State#state.funs ++ [MFA]}}
     end;
 handle_call({demonitor, MFA}, _From, State) ->
-    erlang:trace_pattern(MFA, false, [local]),
+    trace_pattern(State#state.node, MFA, false, [local]),
 
     Pid = erase({handler, MFA}),
     NewFuns = lists:filter(fun(E) -> E =/= MFA end, State#state.funs),
@@ -160,16 +162,44 @@ code_change(_OldVsn, State, _Extra) ->
 
 %% Internal functions
 
-init_tracer() ->
+init_tracer(Node) when Node =:= node() ->
     erlang:trace_pattern({'_','_','_'}, false, [local]),
-    erlang:trace(all, true, [call, timestamp]).
+    erlang:trace(all, true, [call, timestamp]);
+init_tracer(Node) ->
+    Port = 7891, %% tcp port of tracer server
+    Parent = self(),
+    %% start tracer on remote node
+    netload(Node, ?MODULE),
+    netload(Node, xprof_vm_info),
+    RemotePid =
+        spawn_link(
+          Node,
+          fun() ->
+                  erlang:trace_pattern({'_','_','_'}, false, [local]),
+                  Tracer = (dbg:trace_port(ip, Port))(),
+                  erlang:trace(all, true, [call, timestamp, {tracer, Tracer}]),
+                  Parent ! {self(), started},
+                  receive
+                      {Parent, stop} ->
+                          Parent ! {self(), stopped}
+                  end
+          end),
+    receive {RemotePid, started} -> ok end,
+    %% start trace client on local node
+    dbg:trace_client(ip, Port,
+                     {fun({drop, _}, S) -> S;
+                         (Msg, S) -> Parent ! Msg, S
+                      end,
+                      dummy_state}),
+
+    ok.
 
 check_for_overflow(State = #state{paused=false, overflow=true,
                                   trace_spec=TraceSpec}) ->
     {_, QLen} = erlang:process_info(self(), message_queue_len),
     case QLen =< 100 of
         true ->
-            set_trace_opts(true, TraceSpec),
+            set_trace_opts(true, TraceSpec, State#state.node),
             State#state{overflow=false};
         false ->
             State
@@ -179,7 +209,7 @@ check_for_overflow(State = #state{paused=false, overflow=false,
     {_, QLen} = erlang:process_info(self(), message_queue_len),
     case QLen >= 1000 of
         true ->
-            set_trace_opts(false, TraceSpec),
+            set_trace_opts(false, TraceSpec, State#state.node),
             State#state{overflow=true};
         false ->
             State
@@ -188,22 +218,38 @@ check_for_overflow(State) ->
     State.
 
 setup_trace(pause, State) ->
-    set_trace_opts(false, State#state.trace_spec),
+    set_trace_opts(false, State#state.trace_spec, State#state.node),
     State#state{paused = true};
 setup_trace(resume, State = #state{trace_spec=Spec}) ->
     setup_trace(Spec, State#state{trace_spec=undefined});
 setup_trace(Spec, State = #state{trace_spec=undefined}) ->
-    set_trace_opts(true, Spec),
+    set_trace_opts(true, Spec, State#state.node),
     State#state{trace_spec=Spec, paused=false};
 setup_trace(Spec, State) ->
-    catch set_trace_opts(false, State#state.trace_spec),
+    catch set_trace_opts(false, State#state.trace_spec, State#state.node),
     setup_trace(Spec, State#state{trace_spec=undefined}).
 
-set_trace_opts(How, {spawner, SpwPid, _Sampl}) ->
-    erlang:trace(SpwPid, How, [procs, timestamp]);
-set_trace_opts(How, all) ->
-    erlang:trace(all, How, [call, timestamp]);
-set_trace_opts(How, Pid) when is_pid(Pid) ->
-    erlang:trace(Pid, How, [call, timestamp]);
-set_trace_opts(_How, undefined) ->
+set_trace_opts(How, {spawner, SpwPid, _Sampl}, Node) ->
+    trace(Node, SpwPid, How, [procs, timestamp]);
+set_trace_opts(How, all, Node) ->
+    trace(Node, all, How, [call, timestamp]);
+set_trace_opts(How, Pid, Node) when is_pid(Pid) ->
+    trace(Node, Pid, How, [call, timestamp]);
+set_trace_opts(_How, undefined, _Node) ->
     true.
+
+%% Maybe execute on remote node
+
+trace_pattern(Node, MFA, MatchSpec, Flags) when Node =:= node() ->
+    erlang:trace_pattern(MFA, MatchSpec, Flags);
+trace_pattern(Node, MFA, MatchSpec, Flags) ->
+    rpc:call(Node, erlang, trace_pattern, [MFA, MatchSpec, Flags]).
+
+trace(Node, PidSpec, How, Flags) when Node =:= node() ->
+    erlang:trace(PidSpec, How, Flags);
+trace(Node, PidSpec, How, Flags) ->
+    rpc:call(Node, erlang, trace, [PidSpec, How, Flags]).
+
+netload(Node, Mod) ->
+  {Mod, Bin, Fname} = code:get_object_code(Mod),
+  {module, Mod} = rpc:call(Node, code, load_binary, [Mod, Fname, Bin]).
