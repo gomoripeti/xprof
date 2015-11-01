@@ -4,10 +4,14 @@
 
 -behavior(cowboy_http_handler).
 
+-record(state, {node :: node() %% erlang node to profile
+               }).
+
 %% Cowboy callbacks
 
-init(_Type, Req, _Opts) ->
-    {ok, Req, no_state}.
+init(_Type, Req, Opts) ->
+    Node = proplists:get_value(node, Opts),
+    {ok, Req, #state{node = Node}}.
 
 handle(Req, State) ->
     {What,_} = cowboy_req:binding(what, Req),
@@ -23,8 +27,7 @@ terminate(_Reason, _Req, _State) ->
 handle_req(<<"funs">>, Req, State) ->
     {Query, _} = cowboy_req:qs_val(<<"query">>, Req, <<"">>),
 
-    %% FIXME handle remote node in one common place
-    Node = application:get_env(xprof, node, node()),
+    Node = State#state.node,
     Funs = rpc:call(Node, xprof_vm_info, get_available_funs, [Query]),
     Json = jiffy:encode(lists:sort(Funs)),
 

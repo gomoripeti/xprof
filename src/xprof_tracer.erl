@@ -5,7 +5,7 @@
 
 -behaviour(gen_server).
 
--export([start_link/0,
+-export([start_link/1,
          trace/1,
          monitor/1, demonitor/1,
          all_monitored/0,
@@ -29,9 +29,9 @@
                }).
 
 %% @doc Starts xprof tracer process.
--spec start_link() -> {ok, pid()}.
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+-spec start_link(node()) -> {ok, pid()}.
+start_link(Node) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [Node], []).
 
 %% @doc Starts monitoring specified function calls.
 -spec monitor(mfa()) -> ok.
@@ -72,8 +72,7 @@ trace_status() ->
 
 %% gen_server callbacks
 
-init([]) ->
-    Node = application:get_env(xprof, node, node()),
+init([Node]) ->
     init_tracer(Node),
     {ok, #state{node = Node}}.
 

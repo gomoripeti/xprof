@@ -13,12 +13,12 @@
 
 %% API functions
 
-start_link() ->
-    supervisor:start_link({local, ?SERVER}, ?MODULE, []).
+start_link(Node) ->
+    supervisor:start_link({local, ?SERVER}, ?MODULE, [Node]).
 
 %% Supervisor callbacks
 
-init([]) ->
+init([Node]) ->
     TraceHandlerSup = 
 	{xprof_tracer_handler_sup,
 	 {xprof_tracer_handler_sup, start_link, []},
@@ -28,7 +28,7 @@ init([]) ->
 	 [xprof_tracer_handler_sup]},
     Tracer = 
 	{xprof_tracer,
-	 {xprof_tracer, start_link, []},
+	 {xprof_tracer, start_link, [Node]},
 	 permanent,
 	 5000,
 	 worker,
