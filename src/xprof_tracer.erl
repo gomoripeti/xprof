@@ -21,6 +21,8 @@
          terminate/2,
          code_change/3]).
 
+-include("xprof.hrl").
+
 -record(state, {trace_spec  = all,   %% trace specification
                 paused      = true,  %% tracing paused?
                 overflow    = false, %% tracing is paused because of overflow?
@@ -165,7 +167,8 @@ init_tracer(Node) when Node =:= node() ->
     erlang:trace_pattern({'_','_','_'}, false, [local]),
     erlang:trace(all, true, [call, timestamp]);
 init_tracer(Node) ->
-    Port = 7891, %% tcp port of tracer server
+    %% tcp port of tracer server
+    Port = application:get_env(?APP, trace_srv_port, ?DEF_TRACE_SRV_PORT),
     Parent = self(),
     %% start tracer on remote node
     netload(Node, ?MODULE),

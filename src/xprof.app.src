@@ -1,5 +1,5 @@
 {application, xprof,
- [{description, "An OTP application"}
+ [{description, "A visual profiler application"}
  ,{vsn, "0.1.0"}
  ,{registered, []}
  ,{mod, {'xprof_app', []}}
@@ -9,6 +9,8 @@
    ,cowboy
    ,lager
    ]}
- ,{env,[]}
+ ,{env,[{web_port, 7890}, %% tcp port of web interface
+        {trace_srv_port, 7891} %% tcp port of trace server on remote node
+       ]}
  ,{modules, []}
  ]}.

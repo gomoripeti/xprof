@@ -23,7 +23,7 @@ stop(_State) ->
 %% Internal functions
 
 start_cowboy(Node) ->
-    Port = application:get_env(?APP, port, ?DEF_WEB_IF_PORT),
+    Port = application:get_env(?APP, web_port, ?DEF_WEB_IF_PORT),
     Dispatch = cowboy_router:compile(cowboy_routes(Node)),
     cowboy:start_http(xprof_http_listener, 100, [{port, Port}],
                       [{env, [{dispatch, Dispatch}]}]).
