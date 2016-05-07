@@ -136,7 +136,7 @@ handle_info({trace_ts, _Spawner, spawn, NewProc, _MFArgs,_TimeStamp},
 
     case random_uniform() < Sample of
         true ->
-            catch erlang:trace(NewProc, true, [call, procs, timestamp]);
+            catch erlang:trace(NewProc, true, flags([call, procs, timestamp]));
         false ->
             ok
     end,
@@ -197,14 +197,14 @@ set_trace_opts(_How, undefined) ->
 
 trace(PidSpec, How, Flags) ->
     try
-        erlang:trace(PidSpec, How, Flags)
+        erlang:trace(PidSpec, How, flags(Flags))
     catch
         error:badarg ->
             case is_pid(PidSpec) andalso not is_process_alive(PidSpec) of
                 true ->
                     0;
                 _ ->
-                    error(badarg, [PidSpec, How, Flags])
+                    error(badarg, [PidSpec, How, flags(Flags)])
             end
     end.
 
@@ -232,6 +232,16 @@ put_pid(MFA, Pid) ->
 -spec erase_pid(xprof_core:mfa_id()) -> pid() | undefined.
 erase_pid(MFA) ->
     erase({handler, MFA}).
+
+%% use tracer module if OTP version supports it
+%% (supported from OTP 19.0)
+-ifdef(tracer_module).
+flags(Flags) ->
+    [{tracer, xprof_tracer_nif, self()}|Flags].
+-else.
+flags(Flags) ->
+    Flags.
+-endif.
 
 %% the rand module was introduced in OTP 18.0
 %% and random module deprecated in OTP 19.0

@@ -32,3 +32,5 @@ apps/xprof_gui/priv/node_modules/
 compile_commands.json
 
 fprofx.*
+
+apps/xprof_core/priv/nif
