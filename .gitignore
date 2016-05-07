@@ -4,30 +4,21 @@
 .\#*
 \#*
 
-.eunit
-
-deps
-
 *.o
 *.beam
 *.plt
 
 *.DS_Store
 
-Mnesia.*
 erl_crash.dump
 rebar3.crashdump
 log/
 
 *.coverdata
 
-dialyzer.actual
-dialyzer.expected.filtered
-
 doc
 apps/*/doc
 .edts
-
 cover/
 .idea/
 .vscode/
