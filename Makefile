@@ -28,6 +28,9 @@ webpack_autoreload: npm
 test: compile
 	./rebar3 do eunit -c, ct -c, cover
 
+proper:
+	./rebar3 proper
+
 doc:
 	./rebar3 edoc
 
