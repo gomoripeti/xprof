@@ -61,6 +61,9 @@ test_thoas:
 	export XPROF_JSON_LIB=thoas; \
 	$(REBAR3) as test_thoas do compile, dialyzer, cover --reset, ct -c, cover --verbose
 
+proper:
+	$(REBAR3) proper
+
 doc:
 	$(REBAR3) edoc
 
