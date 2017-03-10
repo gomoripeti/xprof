@@ -65,8 +65,33 @@ export default class Graph extends React.Component {
       y: { show: true }
     };
     const axis = {
-      x: { type: "timeseries", tick: { count: 10, fit: false, format: "%H:%M:%S" } },
-      y2: { show: true }
+      x: { type: "timeseries",
+           tick: {
+             // divide the span of 5*60 seconds nicely
+             count: 12,
+             fit: false,
+             outer: false,
+             format: "%H:%M:%S" } },
+      y: { min: 0,
+           // would be nice to have some paddig but it should not screw up tick positions
+           // padding: { bottom: 5 }, // in pixels
+           tick: {
+             // count: 6, // would be nice to have a bit less ticks then the default but by using count:
+             // "The position of the ticks will be calculated precisely, so the values on the ticks will not be rounded nicely."
+             outer: false,
+             format: function (d) {
+	           return d3.format(".2s")(d/1000000)+"s";
+             }
+           }
+         },
+      y2: { show: true,
+            min: 0,
+            // padding: { bottom: 5 }, // in pixels
+            tick: {
+              //count: 6,
+              outer: false
+            }
+          }
     };
     const transition = { duration: 0 };
 
