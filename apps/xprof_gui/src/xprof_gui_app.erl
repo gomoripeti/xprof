@@ -30,8 +30,17 @@ stop(_State) ->
 start_cowboy() ->
     Port = application:get_env(?APP, port, ?DEF_WEB_IF_PORT),
     Dispatch = cowboy_router:compile(cowboy_routes()),
+    start_cowboy(Port, Dispatch).
+
+-ifdef(COWBOY_1).
+start_cowboy(Port, Dispatch) ->
     cowboy:start_http(xprof_http_listener, 100, [{port, Port}],
                       [{env, [{dispatch, Dispatch}]}]).
+-else.
+start_cowboy(Port, Dispatch) ->
+    cowboy:start_clear(xprof_http_listener, [{port, Port}],
+                       #{env => #{dispatch => Dispatch}}).
+-endif.
 
 cowboy_routes() ->
     [{'_', [{"/api/:what", xprof_gui_cowboy1_handler, []},
