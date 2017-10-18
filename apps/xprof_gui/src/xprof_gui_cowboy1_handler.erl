@@ -56,6 +56,11 @@ init(Req0, State) ->
 
 %% Common part to handle different HTTP requests
 
+%% @doc "/api/funs"
+%% Returns:
+%% - 200: ["MFA"]
+%% Get loaded modules and functions (MFAs) that match the query string.
+%% Used for autocomplete suggestions on the GUI.
 handle_req(<<"funs">>, Params, Req) ->
     Query = get_query(Params),
 
@@ -65,6 +70,14 @@ handle_req(<<"funs">>, Params, Req) ->
     lager:debug("Returning ~b functions matching phrase \"~s\"", [length(Funs), Query]),
 
     cowboy_req:reply(200, ?HDR_JSON, Json, Req);
+
+%% @doc "/api/mon_start"
+%% Params:
+%% - "query" (""): the query string represening a XProf-flavoured match-spec
+%% Returns:
+%% - 204: ""
+%% - 400: ""
+%% Start monitoring based on the specified query string.
 handle_req(<<"mon_start">>, Params, Req) ->
     Query = get_query(Params),
 
@@ -79,6 +92,14 @@ handle_req(<<"mon_start">>, Params, Req) ->
             cowboy_req:reply(400, Req)
     end;
 
+%% @doc "/api/mon_stop"
+%% Params:
+%% - "mod"
+%% - "fun"
+%% - "arity"
+%% Returns:
+%% - 204: ""
+%% Stop monitoring the specified function (MFA).
 handle_req(<<"mon_stop">>, Params, Req) ->
     MFA = {M, F, A} = get_mfa(Params),
 
@@ -87,6 +108,13 @@ handle_req(<<"mon_stop">>, Params, Req) ->
     xprof_core:demonitor(MFA),
     cowboy_req:reply(204, ?HDR_NO_CONTENT, Req);
 
+%% @doc "/api/mon_get_all"
+%% Returns:
+%% - 200: [["mod", "fun", "arity", "query"]]
+%% Return list of monitored functions.
+%% (The values of "mod", "fun" and "arity" can be used as params to calls to eg
+%% "/api/mon_stop" while "query" can be used to display the original query
+%% string).
 handle_req(<<"mon_get_all">>, _Params, Req) ->
     Funs = xprof_core:get_all_monitored(),
     FunsArr = [[Mod, Fun, Arity, Query]
@@ -94,6 +122,20 @@ handle_req(<<"mon_get_all">>, _Params, Req) ->
     Json = jsone:encode(FunsArr),
     cowboy_req:reply(200, ?HDR_JSON, Json, Req);
 
+%% @doc "/api/data"
+%% Params:
+%% - "mod"
+%% - "fun"
+%% - "arity"
+%% - "last_ts"
+%% Returns:
+%% - 200: [{"time": timestamp, "hitkey": number}] (where "histkey" is one of:
+%%        min, mean, median, max, stddev,
+%%        p25, p50, p75, p90, p99, p9999999, memsize, count)
+%% - 404: "" (the requested MFA is not monitored)
+%% Return metrics gathered for the given function since the given
+%% timestamp. Each item contains a timestamp and the corresponding histogram
+%% metrics values.
 handle_req(<<"data">>, Params, Req) ->
     MFA = get_mfa(Params),
     LastTS = get_int(<<"last_ts">>, Params, 0),
@@ -106,6 +148,13 @@ handle_req(<<"data">>, Params, Req) ->
             cowboy_req:reply(200, ?HDR_JSON, Json, Req)
     end;
 
+%% @doc "/api/trace_set"
+%% Params:
+%% - "spec" ("all"/"pause")
+%% Returns:
+%% - 204: ""
+%% - 400: "" (if spec has invalid value)
+%% Turn on or pause tracing of all processes.
 handle_req(<<"trace_set">>, Params, Req) ->
     case proplists:get_value(<<"spec">>, Params) of
         <<"all">> ->
@@ -119,6 +168,12 @@ handle_req(<<"trace_set">>, Params, Req) ->
             cowboy_req:reply(400, Req)
     end;
 
+%% @doc "/api/trace_status"
+%% Returns:
+%% - 200: {"status": "initialized"/"running"/"paused"/"overflow"
+%% Return current tracing state.
+%% (The `initialized' status is basically the same as `paused', additionally
+%%  meaning that no tracing was started yet since xprof was started)
 handle_req(<<"trace_status">>, _Params, Req) ->
     {_, Status} = xprof_core:get_trace_status(),
     Json = jsone:encode({[{status, Status}]}),
