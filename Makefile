@@ -1,5 +1,6 @@
 JS_PRIV=apps/xprof_gui/priv
 BIN_DIR:=node_modules/.bin
+CACHEGRIND?=qcachegrind
 
 # this will update cowboy version based on rebar.config overwriting the lock file
 ifdef COWBOY_VERSION
@@ -44,4 +45,17 @@ dialyzer:
 publish:
 	./rebar3 as publish hex publish --deps_from_config
 
-.PHONY: compile dev dev_back_end dev_front_end npm bootstrap_front_end test_front_end build_prod_front_end test doc dialyzer publish
+profile:
+	@echo "Profiling..."
+	@./rebar3 as profile compile
+	@rm -f fprofx.*
+	@erl +K true \
+	     -noshell \
+	     -pa _build/profile/lib/*/ebin \
+	     -pa _build/profile/lib/*/test \
+		 -eval 'xprof_profile:fprofx()' \
+		 -eval 'init:stop()'
+	@_build/profile/lib/fprofx/erlgrindx -p fprofx.analysis
+	@$(CACHEGRIND) fprofx.cgrind
+
+.PHONY: compile dev dev_back_end dev_front_end npm bootstrap_front_end test_front_end build_prod_front_end test doc dialyzer publish profile

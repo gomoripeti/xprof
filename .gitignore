@@ -40,3 +40,5 @@ apps/xprof_gui/priv/bower_components/
 apps/xprof_gui/priv/node_modules/
 
 compile_commands.json
+
+fprofx.*
