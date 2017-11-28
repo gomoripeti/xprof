@@ -1,5 +1,6 @@
 JS_PRIV=apps/xprof_gui/priv
 BIN_DIR:=node_modules/.bin
+CACHEGRIND?=qcachegrind
 
 compile:
 	./rebar3 compile
@@ -36,4 +37,17 @@ dialyzer:
 publish:
 	./rebar3 as publish hex publish
 
-.PHONY: compile dev npm bootstrap_front_end check_front_end test_front_end webpack webpack_autoreload test doc dialyzer
+profile:
+	@echo "Profiling..."
+	@./rebar3 as profile compile
+	@rm -f fprofx.*
+	@erl +K true \
+	     -noshell \
+	     -pa _build/profile/lib/*/ebin \
+	     -pa _build/profile/lib/*/test \
+		 -eval 'xprof_profile:fprofx()' \
+		 -eval 'init:stop()'
+	@_build/profile/lib/fprofx/erlgrindx -p fprofx.analysis
+	@$(CACHEGRIND) fprofx.cgrind
+
+.PHONY: compile dev npm bootstrap_front_end check_front_end test_front_end webpack webpack_autoreload test doc dialyzer publish profile
