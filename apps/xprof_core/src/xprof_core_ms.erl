@@ -1,8 +1,7 @@
 -module(xprof_core_ms).
 
 -export([fun2ms/1,
-         default_ms/0,
-         err/1, err/2, err/3
+         default_ms/0
         ]).
 
 -spec fun2ms(string()) -> {ok, xprof_core:mfa_spec()}
@@ -36,7 +35,7 @@ ms(Clauses) ->
             %% (see https://github.com/erlang/otp/commit/8db6c68b)
             workaround_empty_args_ms(ms(workaround_empty_args_cl(Clauses)));
         {error,[{_,[{Loc,Mod,Code}|_]}|_],_} ->
-            err(Loc, Mod, Code);
+            xprof_core_lib:err(Loc, Mod, Code);
         MS ->
             MS
     end.
@@ -113,24 +112,3 @@ traverse_ms_c([], _) ->
     [];
 traverse_ms_c(Other, _) ->
     Other.
-
--spec err(string()) -> no_return().
-err(Fmt) ->
-    throw({error, fmt(Fmt, [])}).
-
--spec err(string(), list()) -> no_return().
-err(Fmt, Args) ->
-    throw({error, fmt(Fmt, Args)}).
-
--spec err(tuple() | integer(), module(), term()) -> no_return().
-err({1, StartCol, _EndCol}, Mod, Err) ->
-    err({1, StartCol}, Mod, Err);
-
-err({1, Col}, Mod, Err) ->
-    throw({error, fmt("~s at column ~p", [Mod:format_error(Err), Col])});
-
-err(1, Mod, Err) ->
-    throw({error, fmt(Mod:format_error(Err), [])}).
-
-fmt(Fmt, Args) ->
-    lists:flatten(io_lib:format(Fmt, Args)).
