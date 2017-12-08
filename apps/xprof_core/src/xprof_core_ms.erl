@@ -10,7 +10,7 @@
 fun2ms(Str) ->
     ModeCb = xprof_core_lib:get_mode_cb(),
     try
-        case ModeCb:parse_query(Str) of
+        case ModeCb:parse_match_spec(Str) of
             {mfa, MFA} ->
                 {ok, {MFA, default_ms()}};
             {clauses, M, F, Clauses} ->
