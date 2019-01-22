@@ -17,6 +17,7 @@
 -export([t_hdr_total_count/1]).
 -export([t_hdr_max_value/1]).
 -export([t_hdr_min_value/1]).
+-export([t_hdr_mean_value/1]).
 -export([t_hdr_percentiles/1]).
 -export([t_hdr_reset/1]).
 -export([t_hdr_close/1]).
@@ -49,6 +50,7 @@ groups() ->
       , t_hdr_total_count
       , t_hdr_max_value
       , t_hdr_min_value
+      , t_hdr_mean_value
       , t_hdr_percentiles
       , t_hdr_reset
       , t_hdr_close
@@ -104,6 +106,11 @@ t_hdr_max_value(Config) ->
 t_hdr_min_value(Config) ->
     Raw = ?config(raw,Config),
     1000 = xprof_core_hist:min(Raw),
+    ok.
+
+t_hdr_mean_value(Config) ->
+    Raw = ?config(raw,Config),
+    11000.0 = xprof_core_hist:mean(Raw),
     ok.
 
 t_hdr_percentiles(Config) ->
