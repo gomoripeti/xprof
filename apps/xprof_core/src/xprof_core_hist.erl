@@ -57,7 +57,7 @@ do_new(Table, Min, Max, Precision)
        andalso 1 =< Precision andalso Precision =< 5 ->
 
     Largest_value_with_single_unit_resolution = 2 * math:pow(10, Precision),
-    Sub_bucket_count_magnitude = round(float_ceil(math:log2(Largest_value_with_single_unit_resolution))),
+    Sub_bucket_count_magnitude = int_ceil(math:log2(Largest_value_with_single_unit_resolution)),
 
     Sub_bucket_half_count_magnitude =
         case Sub_bucket_count_magnitude < 1 of
@@ -66,7 +66,7 @@ do_new(Table, Min, Max, Precision)
         end,
 
     Unit_magnitude =
-        case round(float_floor(math:log2(Min))) of
+        case int_floor(math:log2(Min)) of
             N when N < 0 -> 0;
             N -> N
         end,
@@ -232,12 +232,6 @@ size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) ->
         end,
     1 bsl (H#hist.unit_magnitude + Adjusted_bucket_index).
 
-float_ceil(F) ->
-    math:ceil(F).
-
-float_floor(F) ->
-    math:floor(F).
-
 -record(it,
         {h :: #hist{},
          total_count, counts,
@@ -286,7 +280,7 @@ do_mean(It) ->
     end.
 
 do_value_at_quantile(It, Q) ->
-    Count_at_percetile = round(float_floor((Q / 100 * It#it.total_count) + 0.5)),
+    Count_at_percetile = int_floor((Q / 100 * It#it.total_count) + 0.5),
 
     enum_reduce_while(
       It, 0,
@@ -357,3 +351,28 @@ count_at_index(It, Bucket_index, Sub_bucket_index) ->
     %% the real count buckets start at 3
     %% Index is zero based
     element(Index + ?TOTAL_COUNT_INDEX + 1, It#it.counts).
+
+%% ceil/1 and floor/1 were introduced in OTP 20
+-ifdef(ceil_floor).
+
+int_ceil(F) ->
+    erlang:ceil(F).
+
+int_floor(F) ->
+    erlang:floor(F).
+
+-else.
+
+int_ceil(F) ->
+    R = round(F),
+    if R < F -> R + 1;
+       true -> R
+    end.
+
+int_floor(F) ->
+    R = round(F),
+    if R > F -> R - 1;
+       true -> R
+    end.
+
+-endif.
