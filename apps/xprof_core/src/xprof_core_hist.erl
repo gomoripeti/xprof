@@ -64,9 +64,16 @@
 -record(hist,
         {table,
          %% field names from elixir
-         name, registrar, bucket_count, counts_length, unit_magnitude,
-         sub_bucket_mask, sub_bucket_count, sub_bucket_half_count,
-         sub_bucket_half_count_magnitude, template
+         name,
+         %% registrar,
+         bucket_count,
+         counts_length,
+         unit_magnitude,
+         sub_bucket_mask,
+         sub_bucket_count,
+         sub_bucket_half_count,
+         sub_bucket_half_count_magnitude
+         %% template
 
          %% field names from C
          , min %% lowest_trackable_value,
@@ -149,10 +156,7 @@ do_new(Table, Min, Max, Precision)
     Bucket_count = calculate_bucket_count(Sub_bucket_count bsl Unit_magnitude, Max, 1),
     Counts_length = round((Bucket_count + 1) * (Sub_bucket_count / 2)),
 
-    %%template = case template do
-    %%  false -> nil
-    %%  true -> create_row(name, name, counts_length)
-    %%end
+    %%Template = create_row(Name, Counts_length)
 
     H = #hist{
            table = Table,
@@ -189,7 +193,7 @@ record(H, Value, N) when is_integer(Value), is_integer(N), N > 0 ->
     end.
 
 reset(H) ->
-    ets:insert(H#hist.table, create_row(H#hist.name, nill, H#hist.counts_length)),
+    ets:insert(H#hist.table, create_row(H#hist.name, H#hist.counts_length)),
     ok.
 
 delete(H) ->
@@ -286,7 +290,7 @@ get_count_index(H, Bucket_index, Sub_bucket_index) ->
     Offset_in_bucket = Sub_bucket_index - H#hist.sub_bucket_half_count,
     Bucket_base_index + Offset_in_bucket.
 
-create_row(Name, _Template, Count) ->
+create_row(Name, Count) ->
     %% +2 for name and total_count that we'll store at the start
     erlang:make_tuple(Count + 2, 0, [{1, Name}]).
 
