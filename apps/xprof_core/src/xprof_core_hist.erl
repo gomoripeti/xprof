@@ -13,6 +13,18 @@
          value_at_quantile/2
         ]).
 
+%% compatibility API with hdr_histogram_erl for testing
+-export([open/2,
+         open/3,
+         close/1,
+         record/2,
+         record_many/3,
+         record_corrected/3,
+         percentile/2,
+         get_total_count/1,
+         same/3
+        ]).
+
 -define(TABLE, ?MODULE).
 
 -define(TOTAL_COUNT_INDEX, 2).
@@ -25,10 +37,10 @@
          sub_bucket_half_count_magnitude, template
 
          %% field names from C
-         %% lowest_trackable_value,
-         %% highest_trackable_value,
+         , min %% lowest_trackable_value,
+         , max %% highest_trackable_value,
          %% unit_magnitude,
-         %% significant_figures,
+         , precision %% significant_figures
          %% sub_bucket_half_count_magnitude,
          %% sub_bucket_half_count,
          %% sub_bucket_mask,
@@ -44,6 +56,36 @@
         }).
 
 %% alias from hdr_histogram NIF API
+open(Max, Prec) ->
+    new(1, Max, Prec).
+
+open(Name, Max, Prec) ->
+    new_concurrent(Name, 1, Max, Prec).
+
+record(H, V) ->
+    record(H, V, 1).
+
+record_many(H, V, N) ->
+    record(H, V, N).
+
+record_corrected(H, V, N) ->
+    record(H, V, N).
+
+close(H) ->
+    delete(H).
+
+percentile(H, Q) ->
+    value_at_quantile(H, Q).
+
+get_total_count(H) ->
+    total_count(H).
+
+same(H, A, B) ->
+    ets:first(H#hist.table), %% badarg if H was deleted (table does not exist)
+    lowest_equivalent_value(H, A) =:= lowest_equivalent_value(H, B).
+
+%%-----------
+
 new(Min, Max, Precision) ->
     Tid = ets:new(?MODULE, [set, private]),
     do_new(Tid, Min, Max, Precision).
@@ -94,16 +136,21 @@ do_new(Table, Min, Max, Precision)
            sub_bucket_mask = Sub_bucket_mask,
            sub_bucket_count = Sub_bucket_count,
            sub_bucket_half_count = Sub_bucket_half_count,
-           sub_bucket_half_count_magnitude = Sub_bucket_half_count_magnitude
+           sub_bucket_half_count_magnitude = Sub_bucket_half_count_magnitude,
+
+           min = Min,
+           max = Max,
+           precision = Precision
           },
     reset(H),
     {ok, H}.
 
 record(H, Value, N) when is_integer(Value), is_integer(N), N > 0 ->
     Index = get_value_index(H, Value),
-    case Index < 0 orelse H#hist.counts_length =< Index of
+    case H#hist.max < Value orelse
+        Index < 0 orelse H#hist.counts_length =< Index of
         true ->
-            {error, outside_of_range};
+            {error, value_out_of_range};
         false ->
             ets:update_counter(H#hist.table,
                                H#hist.name,
@@ -133,13 +180,23 @@ min(H) ->
     do_min(iterator(H)).
 
 mean(H) ->
-    do_mean(iterator(H)).
+    V = do_mean(iterator(H)),
+    %% the NIF does this rounding on the value returned from c code
+    round_to_significant_figures(V, H#hist.precision).
 
 -spec value_at_quantile(#hist{}, float()) -> float().
 value_at_quantile(H, Q) when Q > 0 andalso Q =< 100 ->
-    do_value_at_quantile(iterator(H), Q).
+    V = do_value_at_quantile(iterator(H), Q),
+    %% the NIF does this rounding on the value returned from c code
+    round_to_significant_figures(V, H#hist.precision).
 
 %% Helper functions
+
+round_to_significant_figures(0, _) ->
+    0;
+round_to_significant_figures(V, Prec) ->
+    Factor = math:pow(10.0, Prec - int_ceil(math:log10(abs(V)))),
+    round(V * Factor) / Factor.
 
 calculate_bucket_count(Smallest_untrackable_value, Max, Bucket_count) ->
     case Smallest_untrackable_value < Max of
@@ -250,7 +307,12 @@ do_max(It) ->
                                           false -> It0#it.highest_equivalent_value
                                       end
                            end),
-    highest_equivalent_value(It#it.h, MaxValue).
+    %% The NIF uses an old version of the c code which calls lowest.
+    %% In newer version of HdrHistogram_c hdr_max was refactorred and
+    %% besides other changes it uses highest.
+
+    %%highest_equivalent_value(It#it.h, MaxValue).
+    lowest_equivalent_value(It#it.h, MaxValue).
 
 do_min(It) ->
     Min = enum_reduce_while(
