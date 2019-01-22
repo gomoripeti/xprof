@@ -408,8 +408,6 @@ enum_reduce_while(Enum, Acc, F) ->
 
 it_reduce(_It, {halt, Acc}, _F) ->
     {halted, Acc};
-it_reduce(It, {suspend, Acc}, F)->
-    {suspended, Acc, fun(Acc0) -> it_reduce(It, Acc0, F) end};
 it_reduce(It, {cont, Acc}, F) ->
     case It#it.count_to_index >= It#it.total_count of
         true -> {done, Acc};
