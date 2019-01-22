@@ -49,8 +49,8 @@ new(Min, Max, Precision) ->
     do_new(Tid, Min, Max, Precision).
 
 new_concurrent(Name, Min, Max, Precision) ->
-    Name = ets:new(Name, [set, public, named_table, {write_concurrency, true}]),
-    do_new(Name, Min, Max, Precision).
+    Tid = ets:new(Name, [set, public, {write_concurrency, true}]),
+    do_new(Tid, Min, Max, Precision).
 
 do_new(Table, Min, Max, Precision)
   when Min > 0 andalso Max > Min
