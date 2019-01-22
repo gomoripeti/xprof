@@ -83,22 +83,21 @@ do_new(Table, Min, Max, Precision)
     %%  true -> create_row(name, name, counts_length)
     %%end
 
-    #hist{
-       table = Table,
-       name = hist_key,
-       %%template = Template,
-       %%registrar = Registrar,
-       bucket_count = Bucket_count,
-       counts_length = Counts_length,
-       unit_magnitude = Unit_magnitude,
-       sub_bucket_mask = Sub_bucket_mask,
-       sub_bucket_count = Sub_bucket_count,
-       sub_bucket_half_count = Sub_bucket_half_count,
-       sub_bucket_half_count_magnitude = Sub_bucket_half_count_magnitude
-      }.
-
-
-
+    H = #hist{
+           table = Table,
+           name = hist_key,
+           %%template = Template,
+           %%registrar = Registrar,
+           bucket_count = Bucket_count,
+           counts_length = Counts_length,
+           unit_magnitude = Unit_magnitude,
+           sub_bucket_mask = Sub_bucket_mask,
+           sub_bucket_count = Sub_bucket_count,
+           sub_bucket_half_count = Sub_bucket_half_count,
+           sub_bucket_half_count_magnitude = Sub_bucket_half_count_magnitude
+          },
+    reset(H),
+    {ok, H}.
 
 record(H, Value, N) when is_integer(Value), is_integer(N), N > 0 ->
     Index = get_value_index(H, Value),
@@ -118,7 +117,7 @@ reset(H) ->
     ok.
 
 delete(H) ->
-    ets:delete(H#hist.table, H#hist.name),
+    ets:delete(H#hist.table),
     ok.
 
 %% @doc Get the total number of recorded values. This is O(1)
