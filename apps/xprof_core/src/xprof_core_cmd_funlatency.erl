@@ -211,30 +211,16 @@ maybe_capture({_Pid, CallTime, Args, _Res} = Item, Threshold, _State) ->
     end.
 
 get_current_hist_stats(HistRef, NoMatch) ->
-    Count = xprof_core_hist:total_count(HistRef),
-    TotalCountAndRate =
-        case NoMatch of
-            undefined ->
-                [];
-            _ ->
-                TotalCount = Count + NoMatch,
-                [{total_count, TotalCount},
-                 {match_rate, percent(Count, TotalCount)}]
-        end,
-    [{min,         xprof_core_hist:min(HistRef)},
-     {mean,        xprof_core_hist:mean(HistRef)},
-     %%{median,      xprof_core_hist:median(HistRef)},
-     {max,         xprof_core_hist:max(HistRef)},
-     %%{stddev,      xprof_core_hist:stddev(HistRef)},
-     %%{p25,         xprof_core_hist:percentile(HistRef,25.0)},
-     {p50,         xprof_core_hist:value_at_quantile(HistRef,50.0)},
-     {p75,         xprof_core_hist:value_at_quantile(HistRef,75.0)},
-     {p90,         xprof_core_hist:value_at_quantile(HistRef,90.0)},
-     {p99,         xprof_core_hist:value_at_quantile(HistRef,99.0)},
-     %%{p9999999,    xprof_core_hist:percentile(HistRef,99.9999)},
-     %%{memsize,     xprof_core_hist:get_memory_size(HistRef)},
-     {count,       Count}
-     |TotalCountAndRate].
+    [{count, Count}|_] = Stats = xprof_core_hist:stats(HistRef),
+    case NoMatch of
+        undefined ->
+            Stats;
+        _ ->
+            TotalCount = Count + NoMatch,
+            [{total_count, TotalCount},
+             {match_rate, percent(Count, TotalCount)}
+             |Stats]
+    end.
 
 percent(_, 0) ->
     0;

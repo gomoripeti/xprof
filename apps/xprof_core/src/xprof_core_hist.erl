@@ -10,7 +10,9 @@
          max/1,
          min/1,
          mean/1,
-         value_at_quantile/2
+         value_at_quantile/2,
+
+         stats/1
         ]).
 
 %% compatibility API with hdr_histogram_erl for testing
@@ -186,6 +188,18 @@ value_at_quantile(H, Q) when Q > 0 andalso Q =< 100 ->
     %% the NIF does this rounding on the value returned from c code
     round_to_significant_figures(V, H#hist.precision).
 
+stats(H) ->
+    It = iterator(H),
+    [{count, do_total_count(It)},
+     {min, do_min(It)},
+     {mean, do_mean(It)},
+     {max, do_max(It)},
+     {p50, do_value_at_quantile(It, 50.0)},
+     {p75, do_value_at_quantile(It, 75.0)},
+     {p90, do_value_at_quantile(It, 90.0)},
+     {p99, do_value_at_quantile(It, 99.0)}
+    ].
+
 %% Helper functions
 
 round_to_significant_figures(0, _) ->
@@ -294,6 +308,8 @@ size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) ->
 iterator(H) ->
     Counts = get_counts(H),
     #it{h = H, counts = Counts, total_count = element(?TOTAL_COUNT_INDEX, Counts)}.
+do_total_count(It) ->
+    It#it.total_count.
 
 do_max(It) ->
     MaxValue = enum_reduce(It, 0,
