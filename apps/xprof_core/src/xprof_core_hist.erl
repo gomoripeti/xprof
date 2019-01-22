@@ -19,7 +19,6 @@
          close/1,
          record/2,
          record_many/3,
-         record_corrected/3,
          percentile/2,
          get_total_count/1,
          same/3
@@ -66,9 +65,6 @@ record(H, V) ->
     record(H, V, 1).
 
 record_many(H, V, N) ->
-    record(H, V, N).
-
-record_corrected(H, V, N) ->
     record(H, V, N).
 
 close(H) ->
