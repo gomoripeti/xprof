@@ -246,8 +246,8 @@ get_count_index(H, Bucket_index, Sub_bucket_index) ->
     Bucket_base_index + Offset_in_bucket.
 
 create_row(Name, _Template, Count) ->
-    %% +1 for the total_count that we'll store at the start
-    list_to_tuple([Name | lists:duplicate(Count + 1, 0)]).
+    %% +2 for name and total_count that we'll store at the start
+    erlang:make_tuple(Count + 2, 0, [{1, Name}]).
 
 get_counts(H) ->
     case ets:lookup(H#hist.table, H#hist.name) of
