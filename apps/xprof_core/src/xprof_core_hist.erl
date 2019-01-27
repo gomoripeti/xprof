@@ -305,8 +305,8 @@ get_counts(H) ->
 value_from_index(H, Bucket_index, Sub_bucket_index) ->
     Sub_bucket_index bsl (Bucket_index + H#hist.unit_magnitude).
 
-highest_equivalent_value(H, Value) ->
-    next_non_equivalent_value(H, Value) - 1.
+highest_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
+    next_non_equivalent_value(H, Bucket_index, Sub_bucket_index) - 1.
 
 lowest_equivalent_value(H, Value) ->
     {Bucket_index, Sub_bucket_index} = get_bucket_indexes(H, Value),
@@ -315,13 +315,11 @@ lowest_equivalent_value(H, Value) ->
 lowest_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
     value_from_index(H, Bucket_index, Sub_bucket_index).
 
-next_non_equivalent_value(H, Value) ->
-    {Bucket_index, Sub_bucket_index} = get_bucket_indexes(H, Value),
+next_non_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
     lowest_equivalent_value(H, Bucket_index, Sub_bucket_index)
         + size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index).
 
-median_equivalent_value(H, Value) ->
-    {Bucket_index, Sub_bucket_index} = get_bucket_indexes(H, Value),
+median_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
     lowest_equivalent_value(H, Bucket_index, Sub_bucket_index)
         + (size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) bsr 1).
 
@@ -336,8 +334,10 @@ size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) ->
 -record(it,
         {h :: #hist{},
          total_count, counts,
-         bucket_index = 0, sub_bucket_index = -1, count_at_index = 0,
-         count_to_index = 0, value_from_index = 0, highest_equivalent_value = 0
+         bucket_index = 0,
+         sub_bucket_index = -1,
+         count_at_index = 0,
+         count_to_index = 0
         }).
 
 iterator(H) ->
@@ -347,30 +347,34 @@ do_total_count(It) ->
     It#it.total_count.
 
 do_max(It) ->
-    MaxValue = enum_reduce(It, 0,
-                           fun(It0, Max0) ->
-                                      case It0#it.count_at_index =:= 0 of
-                                          true -> Max0;
-                                          false -> It0#it.highest_equivalent_value
-                                      end
-                           end),
+    {MaxBucketIndex, MaxSubBucketIndex} =
+        enum_reduce(It, {0, -1},
+                    fun(It0, Max0) ->
+                            case It0#it.count_at_index =:= 0 of
+                                true -> Max0;
+                                false ->
+                                    {It0#it.bucket_index, It0#it.sub_bucket_index}
+                            end
+                    end),
     %% The NIF uses an old version of the c code which calls lowest.
     %% In newer version of HdrHistogram_c hdr_max was refactorred and
     %% besides other changes it uses highest.
 
     %%highest_equivalent_value(It#it.h, MaxValue).
-    lowest_equivalent_value(It#it.h, MaxValue).
+    lowest_equivalent_value(It#it.h, MaxBucketIndex, MaxSubBucketIndex).
 
 do_min(It) ->
-    Min = enum_reduce_while(
-            It, 0,
-            fun(It0, Min0) ->
-                    case It0#it.count_at_index =/= 0 andalso Min0 =:= 0 of
-                        true -> {halt, It0#it.highest_equivalent_value};
-                        false -> {cont, Min0}
-                    end
-            end),
-    lowest_equivalent_value(It#it.h, Min).
+    {MinBucketIndex, MinSubBucketIndex} =
+        enum_reduce_while(
+          It, {0, -1},
+          fun(It0, Min0) ->
+                  case It0#it.count_at_index =/= 0  andalso Min0 =:= {0, -1} of
+                      true ->
+                          {halt, {It0#it.bucket_index, It0#it.sub_bucket_index}};
+                      false -> {cont, Min0}
+                  end
+          end),
+    lowest_equivalent_value(It#it.h, MinBucketIndex, MinSubBucketIndex).
 
 do_mean(It) ->
     case It#it.total_count =:= 0 of
@@ -381,7 +385,8 @@ do_mean(It) ->
                       fun(It0, Total0) ->
                               case It0#it.count_at_index of
                                   0 -> Total0;
-                                  N -> Total0 + N * median_equivalent_value(It0#it.h, It0#it.value_from_index)
+                                  N ->
+                                      Total0 + N * median_equivalent_value(It0#it.h, It0#it.bucket_index, It0#it.sub_bucket_index)
                               end
                       end),
             Total / It#it.total_count
@@ -395,8 +400,9 @@ do_value_at_quantile(It, Q) ->
       fun(It0, Total0) ->
               Total = Total0 + It0#it.count_at_index,
               case Total >= Count_at_percetile of
-                  true -> {halt, highest_equivalent_value(
-                                   It0#it.h, It0#it.value_from_index)};
+                  true ->
+                      {halt, highest_equivalent_value(
+                                   It0#it.h, It0#it.bucket_index, It0#it.sub_bucket_index)};
                   false -> {cont, Total}
               end
       end).
@@ -420,34 +426,30 @@ it_reduce(It, {cont, Acc}, F) ->
 
 it_do_reduce(It, Acc, F) ->
     H = It#it.h,
+    Bucket_index = It#it.bucket_index,
     Sub_bucket_index = It#it.sub_bucket_index + 1,
-    {It3, Bucket_index3, Sub_bucket_index3} =
+    {Bucket_index3, Sub_bucket_index3} =
         case Sub_bucket_index >= H#hist.sub_bucket_count of
             true ->
-                Bucket_index = It#it.bucket_index + 1,
+                Bucket_index2 = Bucket_index + 1,
                 Sub_bucket_index2 = H#hist.sub_bucket_half_count,
-                It2 = It#it{bucket_index = Bucket_index,
-                            sub_bucket_index = Sub_bucket_index2},
-                {It2, Bucket_index, Sub_bucket_index2};
+                {Bucket_index2, Sub_bucket_index2};
             false ->
-                It2 = It#it{sub_bucket_index = Sub_bucket_index},
-                {It2, It2#it.bucket_index, Sub_bucket_index}
+                {Bucket_index, Sub_bucket_index}
         end,
 
     case Bucket_index3 >= H#hist.bucket_count of
         true -> {done, Acc};
         false ->
             Count_at_index =
-                count_at_index(It3, Bucket_index3, Sub_bucket_index3),
-            Value_from_index = value_from_index(H, Bucket_index3, Sub_bucket_index3),
-                It4 = It3#it{
+                count_at_index(It, Bucket_index3, Sub_bucket_index3),
+                It2 = It#it{
+                        bucket_index = Bucket_index3,
+                        sub_bucket_index = Sub_bucket_index3,
                         count_at_index = Count_at_index,
-                        value_from_index = Value_from_index,
-                        count_to_index = It3#it.count_to_index + Count_at_index,
-                        highest_equivalent_value =
-                            highest_equivalent_value(H, Value_from_index)
+                        count_to_index = It#it.count_to_index + Count_at_index
                        },
-            it_reduce(It4, F(It4, Acc), F)
+            it_reduce(It2, F(It2, Acc), F)
     end.
 
 count_at_index(It, Bucket_index, Sub_bucket_index) ->
