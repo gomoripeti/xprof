@@ -361,15 +361,7 @@ do_total_count(It) ->
     It#it.total_count.
 
 do_max(It) ->
-    MaxIndex =
-        enum_reduce(It, -1,
-                    fun(It0, Max0) ->
-                            case It0#it_state.count_at_index =:= 0 of
-                                true -> Max0;
-                                false ->
-                                    It0#it_state.index
-                            end
-                    end),
+    MaxIndex = do_max_loop(It, 0, 0, 0),
     {MaxBucketIndex, MaxSubBucketIndex} =
         get_bucket_indexes_from_index(It#it.h, MaxIndex),
     %% The NIF uses an old version of the c code which calls lowest.
@@ -379,95 +371,78 @@ do_max(It) ->
     %%highest_equivalent_value(It#it.h, MaxValue).
     lowest_equivalent_value(It#it.h, MaxBucketIndex, MaxSubBucketIndex).
 
+do_max_loop(It, Index, CountToIndex0, Max0) ->
+    CountAtIndex = count_at_index(It, Index),
+    CountToIndex = CountToIndex0 + CountAtIndex,
+    case CountToIndex >= It#it.total_count of
+        true -> Index;
+        false ->
+          do_max_loop(It, Index + 1, CountToIndex, Max0)
+    end.
+
 do_min(It) ->
-    MinIndex =
-        enum_reduce_while(
-          It, -1,
-          fun(It0, Min0) ->
-                  case It0#it_state.count_at_index =/= 0  andalso Min0 =:= -1 of
-                      true -> {halt, It0#it_state.index};
-                      false -> {cont, Min0}
-                  end
-          end),
-    {MinBucketIndex, MinSubBucketIndex} =
-        get_bucket_indexes_from_index(It#it.h, MinIndex),
-    lowest_equivalent_value(It#it.h, MinBucketIndex, MinSubBucketIndex).
+    case It#it.total_count of
+        0 -> 0;
+        _ ->
+            MinIndex = do_min_loop(It, 0),
+            {MinBucketIndex, MinSubBucketIndex} =
+                get_bucket_indexes_from_index(It#it.h, MinIndex),
+            lowest_equivalent_value(It#it.h, MinBucketIndex, MinSubBucketIndex)
+    end.
+
+do_min_loop(It, Index) ->
+  Count_at_index = count_at_index(It, Index),
+  case Count_at_index =/= 0 of
+      true ->
+          Index;
+      false ->
+          do_min_loop(It, Index + 1)
+  end.
 
 do_mean(It) ->
     case It#it.total_count =:= 0 of
         true -> 0;
         false ->
-            H = It#it.h,
-            Total = enum_reduce(
-                      It, 0,
-                      fun(It0, Total0) ->
-                              case It0#it_state.count_at_index of
-                                  0 -> Total0;
-                                  N ->
-                                      {BucketIndex, SubBucketIndex} =
-                                          get_bucket_indexes_from_index(H, It0#it_state.index),
-                                      Total0 + N * median_equivalent_value(
-                                                     H,
-                                                     BucketIndex,
-                                                     SubBucketIndex)
-                              end
-                      end),
+            Total = do_mean_loop(It, 0, 0, 0),
             Total / It#it.total_count
+    end.
+
+do_mean_loop(It, Index, CountToIndex, Total0) ->
+    case CountToIndex >= It#it.total_count of
+        true -> Total0;
+        false ->
+            CountAtIndex = count_at_index(It, Index),
+            Total =
+                case CountAtIndex of
+                    0 -> Total0;
+                    N ->
+                        {BucketIndex, SubBucketIndex} =
+                            get_bucket_indexes_from_index(It#it.h, Index),
+                        Total0 + N * median_equivalent_value(
+                                       It#it.h,
+                                       BucketIndex,
+                                       SubBucketIndex)
+                end,
+            do_mean_loop(It, Index + 1, CountToIndex + CountAtIndex, Total)
     end.
 
 do_value_at_quantile(It, Q) ->
     Count_at_percetile = round(Q / 100 * It#it.total_count),
     H = It#it.h,
 
-    enum_reduce_while(
-      It, 0,
-      fun(It0, Total0) ->
-              Total = Total0 + It0#it_state.count_at_index,
-              case Total >= Count_at_percetile of
-                  true ->
-                      {BucketIndex, SubBucketIndex} =
-                          get_bucket_indexes_from_index(H, It0#it_state.index),
-                      {halt, highest_equivalent_value(
-                               H,
-                               BucketIndex,
-                               SubBucketIndex)};
-                  false -> {cont, Total}
-              end
-      end).
+    Index = do_quantile_loop(It, 0, 0, Count_at_percetile),
+    {BucketIndex, SubBucketIndex} =
+        get_bucket_indexes_from_index(H, Index),
+    highest_equivalent_value(H, BucketIndex, SubBucketIndex).
 
-enum_reduce(It, Acc, F) ->
-    State = It#it.state,
-    {_, Res} = it_reduce(It, State, {cont, Acc},
-                         fun(X, Acc0) -> {cont, F(X, Acc0)} end),
-    Res.
-                                       
-enum_reduce_while(It, Acc, F) ->
-    State = It#it.state,
-    {_, Res} = it_reduce(It, State, {cont, Acc}, F),
-    Res.
-
-it_reduce(_It, _State, {halt, Acc}, _F) ->
-    {halted, Acc};
-it_reduce(It, State, {cont, Acc}, F) ->
-    case State#it_state.count_to_index >= It#it.total_count of
-        true -> {done, Acc};
-        false -> it_do_reduce(It, State, Acc, F)
-    end.
-
-it_do_reduce(It, ItS, Acc, F) ->
-    H = It#it.h,
-    Index = ItS#it_state.index + 1,
-
-    case Index >= H#hist.counts_length of
-        true -> {done, Acc};
+do_quantile_loop(It, Index, CountToIndex0, CountAtPercentile) ->
+    CountAtIndex = count_at_index(It, Index),
+    CountToIndex = CountToIndex0 + CountAtIndex,
+    case CountToIndex >= CountAtPercentile of
+        true -> Index;
         false ->
-            Count_at_index = count_at_index(It, Index),
-            ItS2 = #it_state{
-                      index = Index,
-                      count_at_index = Count_at_index,
-                      count_to_index = ItS#it_state.count_to_index + Count_at_index
-                     },
-            it_reduce(It, ItS2, F(ItS2, Acc), F)
+
+            do_quantile_loop(It, Index + 1, CountToIndex, CountAtPercentile)
     end.
 
 count_at_index(It, Index) ->
