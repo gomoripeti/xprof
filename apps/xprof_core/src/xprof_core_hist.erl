@@ -207,10 +207,10 @@ total_count(H) ->
     element(?TOTAL_COUNT_INDEX, Counts).
 
 max(H) ->
-    do_max(iterator(H)).
+    hd(do_get_multi_value(iterator(H), [max])).
 
 min(H) ->
-    do_min(iterator(H)).
+    hd(do_get_multi_value(iterator(H), [min])).
 
 mean(H) ->
     V = do_mean(iterator(H)),
@@ -219,20 +219,27 @@ mean(H) ->
 
 -spec value_at_quantile(#hist{}, float()) -> float().
 value_at_quantile(H, Q) when Q > 0 andalso Q =< 100 ->
-    V = do_value_at_quantile(iterator(H), Q),
-    %% the NIF does this rounding on the value returned from c code
-    round_to_significant_figures(V, H#hist.precision).
+    hd(do_get_multi_value(iterator(H), [{percentile, Q}])).
 
 stats(H) ->
     It = iterator(H),
+    [Min, P50, P75, P90, P99, Max] =
+        do_get_multi_value(
+          It,
+          [min,
+           {percentile, 50.0},
+           {percentile, 75.0},
+           {percentile, 90.0},
+           {percentile, 99.0},
+           max]),
     [{count, do_total_count(It)},
-     {min, do_min(It)},
+     {min, Min},
      {mean, do_mean(It)},
-     {max, do_max(It)},
-     {p50, do_value_at_quantile(It, 50.0)},
-     {p75, do_value_at_quantile(It, 75.0)},
-     {p90, do_value_at_quantile(It, 90.0)},
-     {p99, do_value_at_quantile(It, 99.0)}
+     {max, Max},
+     {p50, P50},
+     {p75, P75},
+     {p90, P90},
+     {p99, P99}
     ].
 
 %% Helper functions
@@ -360,36 +367,6 @@ iterator(H) ->
 do_total_count(It) ->
     It#it.total_count.
 
-do_max(It) ->
-    MaxIndex = do_quantile_loop(It, 0, 0, It#it.total_count),
-    {MaxBucketIndex, MaxSubBucketIndex} =
-        get_bucket_indexes_from_index(It#it.h, MaxIndex),
-    %% The NIF uses an old version of the c code which calls lowest.
-    %% In newer version of HdrHistogram_c hdr_max was refactorred and
-    %% besides other changes it uses highest.
-
-    %%highest_equivalent_value(It#it.h, MaxValue).
-    lowest_equivalent_value(It#it.h, MaxBucketIndex, MaxSubBucketIndex).
-
-do_min(It) ->
-    case It#it.total_count of
-        0 -> 0;
-        _ ->
-            MinIndex = do_min_loop(It, 0),
-            {MinBucketIndex, MinSubBucketIndex} =
-                get_bucket_indexes_from_index(It#it.h, MinIndex),
-            lowest_equivalent_value(It#it.h, MinBucketIndex, MinSubBucketIndex)
-    end.
-
-do_min_loop(It, Index) ->
-  Count_at_index = count_at_index(It, Index),
-  case Count_at_index =/= 0 of
-      true ->
-          Index;
-      false ->
-          do_min_loop(It, Index + 1)
-  end.
-
 do_mean(It) ->
     case It#it.total_count =:= 0 of
         true -> 0;
@@ -417,24 +394,59 @@ do_mean_loop(It, Index, CountToIndex, Total0) ->
             do_mean_loop(It, Index + 1, CountToIndex + CountAtIndex, Total)
     end.
 
-do_value_at_quantile(It, Q) ->
-    Count_at_percetile = round(Q / 100 * It#it.total_count),
-    H = It#it.h,
+do_get_multi_value(#it{total_count = 0}, QList) ->
+    [0 || _ <- QList];
+do_get_multi_value(It, QList) ->
+    PreparedQList =
+        [case Item of
+             max ->
+                 {max, It#it.total_count};
+             min ->
+                 {min, 1};
+             {percentile, Q} ->
+                 CountAtPercentile = round(Q / 100 * It#it.total_count),
+                 {percentile, CountAtPercentile}
+         end
+         || Item <- QList],
+    CountAtIndex = count_at_index(It, 0),
+    do_multi_loop(It, 0, CountAtIndex, PreparedQList, []).
 
-    Index = do_quantile_loop(It, 0, 0, Count_at_percetile),
+do_multi_loop(It, Index, CountToIndex, [{Tag, CountAtPercentile}|Multi], Res) ->
+    do_multi_loop(It, Index, CountToIndex, Tag, CountAtPercentile, Multi, Res);
+do_multi_loop(_, _, _, [], Res) ->
+    lists:reverse(Res).
+
+do_multi_loop(It, Index, CountToIndex, Tag, CountAtPercentile, Multi, Res) ->
+    case CountToIndex >= CountAtPercentile of
+        true ->
+            do_multi_loop(It, Index, CountToIndex, Multi,
+                          [get_value_from_index(It#it.h, Tag, Index)|Res]);
+        false ->
+            NextIndex = Index + 1,
+            CountAtNextIndex = count_at_index(It, NextIndex),
+            CountToNextIndex = CountToIndex + CountAtNextIndex,
+            do_multi_loop(It, NextIndex, CountToNextIndex, Tag, CountAtPercentile, Multi, Res)
+    end.
+
+get_value_from_index(H, max, MaxIndex) ->
+    {MaxBucketIndex, MaxSubBucketIndex} =
+        get_bucket_indexes_from_index(H, MaxIndex),
+    %% The NIF uses an old version of the c code which calls lowest.
+    %% In newer version of HdrHistogram_c hdr_max was refactorred and
+    %% besides other changes it uses highest.
+
+    %%highest_equivalent_value(It#it.h, MaxValue).
+    lowest_equivalent_value(H, MaxBucketIndex, MaxSubBucketIndex);
+get_value_from_index(H, min, MinIndex) ->
+    {MinBucketIndex, MinSubBucketIndex} =
+        get_bucket_indexes_from_index(H, MinIndex),
+    lowest_equivalent_value(H, MinBucketIndex, MinSubBucketIndex);
+get_value_from_index(H, percentile, Index) ->
     {BucketIndex, SubBucketIndex} =
         get_bucket_indexes_from_index(H, Index),
-    highest_equivalent_value(H, BucketIndex, SubBucketIndex).
-
-do_quantile_loop(It, Index, CountToIndex0, CountAtPercentile) ->
-    CountAtIndex = count_at_index(It, Index),
-    CountToIndex = CountToIndex0 + CountAtIndex,
-    case CountToIndex >= CountAtPercentile of
-        true -> Index;
-        false ->
-
-            do_quantile_loop(It, Index + 1, CountToIndex, CountAtPercentile)
-    end.
+    V = highest_equivalent_value(H, BucketIndex, SubBucketIndex),
+    %% the NIF does this rounding on the value returned from c code
+    round_to_significant_figures(V, H#hist.precision).
 
 count_at_index(It, Index) ->
     %% 1 is the name
