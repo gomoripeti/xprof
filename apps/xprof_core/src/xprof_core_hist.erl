@@ -416,7 +416,7 @@ do_mean(It) ->
     end.
 
 do_value_at_quantile(It, Q) ->
-    Count_at_percetile = int_floor((Q / 100 * It#it.total_count) + 0.5),
+    Count_at_percetile = round(Q / 100 * It#it.total_count),
     H = It#it.h,
 
     enum_reduce_while(
