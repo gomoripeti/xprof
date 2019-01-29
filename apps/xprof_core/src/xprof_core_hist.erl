@@ -361,7 +361,7 @@ do_total_count(It) ->
     It#it.total_count.
 
 do_max(It) ->
-    MaxIndex = do_max_loop(It, 0, 0, 0),
+    MaxIndex = do_quantile_loop(It, 0, 0, It#it.total_count),
     {MaxBucketIndex, MaxSubBucketIndex} =
         get_bucket_indexes_from_index(It#it.h, MaxIndex),
     %% The NIF uses an old version of the c code which calls lowest.
@@ -370,15 +370,6 @@ do_max(It) ->
 
     %%highest_equivalent_value(It#it.h, MaxValue).
     lowest_equivalent_value(It#it.h, MaxBucketIndex, MaxSubBucketIndex).
-
-do_max_loop(It, Index, CountToIndex0, Max0) ->
-    CountAtIndex = count_at_index(It, Index),
-    CountToIndex = CountToIndex0 + CountAtIndex,
-    case CountToIndex >= It#it.total_count of
-        true -> Index;
-        false ->
-          do_max_loop(It, Index + 1, CountToIndex, Max0)
-    end.
 
 do_min(It) ->
     case It#it.total_count of
