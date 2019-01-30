@@ -86,7 +86,7 @@ init(Options, _MFASpec) ->
                   undefined -> undefined;
                   _ -> 0
               end,
-    {ok, HDR} = xprof_core_hist:new(1, MaxDuration, 3),
+    {ok, HDR} = xprof_core_hist:new(MaxDuration, 3),
     {ok, #state{hdr_ref = HDR,
                 max_duration = MaxDuration,
                 ignore_recursion = IgnoreRecursion,
@@ -116,9 +116,9 @@ handle_event({trace_ts, Pid, Tag, MFA, RetOrExc, EndTime},
                             lager:error("Call ~p took ~p ms that is larger than the maximum "
                                         "that can be stored (~p ms)",
                                         [MFA, CallTime/1000, MaxDuration div 1000]),
-                            ok = xprof_core_hist:record(Ref, MaxDuration, 1);
+                            ok = xprof_core_hist:record(Ref, MaxDuration);
                        true ->
-                            ok = xprof_core_hist:record(Ref, CallTime, 1)
+                            ok = xprof_core_hist:record(Ref, CallTime)
                     end,
 
                     maybe_capture({Pid, CallTime, Args, {Tag, NewRet}},

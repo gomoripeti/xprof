@@ -31,9 +31,11 @@
 
 -module(xprof_core_hist).
 
--export([new/3,
+-export([new/2,
+         new/3,
          new_concurrent/4,
-         record/3,
+         record/2,
+         record_many/3,
          reset/1,
          delete/1,
 
@@ -41,7 +43,7 @@
          max/1,
          min/1,
          mean/1,
-         value_at_quantile/2,
+         percentile/2,
 
          stats/1
         ]).
@@ -50,9 +52,6 @@
 -export([open/2,
          open/3,
          close/1,
-         record/2,
-         record_many/3,
-         percentile/2,
          get_total_count/1,
          same/3
         ]).
@@ -65,7 +64,6 @@
         {table,
          %% field names from elixir
          name,
-         %% registrar,
          bucket_count,
          counts_length,
          unit_magnitude,
@@ -73,45 +71,25 @@
          sub_bucket_count,
          sub_bucket_half_count,
          sub_bucket_half_count_magnitude
-         %% template
 
-         %% field names from C
+         %% additional field names from C
          , min %% lowest_trackable_value,
          , max %% highest_trackable_value,
-         %% unit_magnitude,
          , precision %% significant_figures
-         %% sub_bucket_half_count_magnitude,
-         %% sub_bucket_half_count,
-         %% sub_bucket_mask,
-         %% sub_bucket_count,
-         %% bucket_count,
-         %% min_value,
-         %% max_value,
-         %% normalizing_index_offset,
-         %% conversion_ratio,
-         %% counts_len,
-         %% total_count,
-         %% %%counts :: tid()
         }).
 
-%% alias from hdr_histogram NIF API
+%%
+%% Aliases from hdr_histogram NIF API
+%%
+
 open(Max, Prec) ->
     new(1, Max, Prec).
 
 open(Name, Max, Prec) ->
     new_concurrent(Name, 1, Max, Prec).
 
-record(H, V) ->
-    record(H, V, 1).
-
-record_many(H, V, N) ->
-    record(H, V, N).
-
 close(H) ->
     delete(H).
-
-percentile(H, Q) ->
-    value_at_quantile(H, Q).
 
 get_total_count(H) ->
     total_count(H).
@@ -122,12 +100,15 @@ same(H, A, B) ->
 
 %%-----------
 
+new(Max, Precision) ->
+    new(1, Max, Precision).
+
 new(Min, Max, Precision) ->
-    Tid = ets:new(?MODULE, [set, private]),
+    Tid = storage_new(),
     do_new(Tid, Min, Max, Precision).
 
 new_concurrent(Name, Min, Max, Precision) ->
-    Tid = ets:new(Name, [set, public, {write_concurrency, true}]),
+    Tid = storage_new_concurrent(Name),
     do_new(Tid, Min, Max, Precision).
 
 do_new(Table, Min, Max, Precision)
@@ -156,13 +137,9 @@ do_new(Table, Min, Max, Precision)
     Bucket_count = calculate_bucket_count(Sub_bucket_count bsl Unit_magnitude, Max, 1),
     Counts_length = round((Bucket_count + 1) * (Sub_bucket_count / 2)),
 
-    %%Template = create_row(Name, Counts_length)
-
     H = #hist{
            table = Table,
            name = hist_key,
-           %%template = Template,
-           %%registrar = Registrar,
            bucket_count = Bucket_count,
            counts_length = Counts_length,
            unit_magnitude = Unit_magnitude,
@@ -178,32 +155,32 @@ do_new(Table, Min, Max, Precision)
     reset(H),
     {ok, H}.
 
-record(H, Value, N) when is_integer(Value), is_integer(N), N > 0 ->
+record(H, Value) when is_integer(Value) ->
+    do_record(H, Value, 1).
+
+record_many(H, Value, N) when is_integer(Value), is_integer(N), N > 0 ->
+    do_record(H, Value, N).
+
+do_record(H, Value, N) ->
     Index = get_value_index(H, Value),
     case H#hist.max < Value orelse
         Index < 0 orelse H#hist.counts_length =< Index of
         true ->
             {error, value_out_of_range};
         false ->
-            ets:update_counter(H#hist.table,
-                               H#hist.name,
-                               [{?TOTAL_COUNT_INDEX, N},
-                                {Index + ?TOTAL_COUNT_INDEX + 1, N}]),
-            ok
+            storage_record(H, Index, N)
     end.
 
 reset(H) ->
-    ets:insert(H#hist.table, create_row(H#hist.name, H#hist.counts_length)),
-    ok.
+    storage_reset(H).
 
 delete(H) ->
-    ets:delete(H#hist.table),
-    ok.
+    storage_delete(H).
 
 %% @doc Get the total number of recorded values. This is O(1)
 -spec total_count(#hist{}) -> non_neg_integer().
 total_count(H) ->
-    Counts = get_counts(H),
+    Counts = storage_get_counts(H),
     element(?TOTAL_COUNT_INDEX, Counts).
 
 max(H) ->
@@ -213,12 +190,10 @@ min(H) ->
     hd(do_get_multi_value(iterator(H), [min])).
 
 mean(H) ->
-    V = do_mean(iterator(H)),
-    %% the NIF does this rounding on the value returned from c code
-    round_to_significant_figures(V, H#hist.precision).
+    do_mean(iterator(H)).
 
--spec value_at_quantile(#hist{}, float()) -> float().
-value_at_quantile(H, Q) when Q > 0 andalso Q =< 100 ->
+-spec percentile(#hist{}, float()) -> float().
+percentile(H, Q) when Q > 0 andalso Q =< 100 ->
     hd(do_get_multi_value(iterator(H), [{percentile, Q}])).
 
 stats(H) ->
@@ -242,7 +217,45 @@ stats(H) ->
      {p99, P99}
     ].
 
-%% Helper functions
+%%
+%% Storage
+%%
+
+storage_new() ->
+    ets:new(?MODULE, [set, private]).
+
+storage_new_concurrent(Name) ->
+    ets:new(Name, [set, public, {write_concurrency, true}]).
+
+storage_record(H, Index, N) ->
+    ets:update_counter(H#hist.table, H#hist.name,
+                       [{?TOTAL_COUNT_INDEX, N},
+                        {Index + ?TOTAL_COUNT_INDEX + 1, N}]),
+    ok.
+
+storage_get_counts(H) ->
+    case ets:lookup(H#hist.table, H#hist.name) of
+        [] ->
+            throw(data_missing_from_ets);
+        [Counts] ->
+            Counts
+    end.
+
+storage_reset(H) ->
+    ets:insert(H#hist.table, create_row(H#hist.name, H#hist.counts_length)),
+    ok.
+
+storage_delete(H) ->
+    ets:delete(H#hist.table),
+    ok.
+
+create_row(Name, Count) ->
+    %% counters come after name and total_count that are stored at the start
+    erlang:make_tuple(?TOTAL_COUNT_INDEX + Count, 0, [{1, Name}]).
+
+%%
+%% Calculations
+%%
 
 round_to_significant_figures(0, _) ->
     0;
@@ -306,18 +319,6 @@ get_count_index(H, Bucket_index, Sub_bucket_index) ->
     Offset_in_bucket = Sub_bucket_index - H#hist.sub_bucket_half_count,
     Bucket_base_index + Offset_in_bucket.
 
-create_row(Name, Count) ->
-    %% +2 for name and total_count that we'll store at the start
-    erlang:make_tuple(Count + 2, 0, [{1, Name}]).
-
-get_counts(H) ->
-    case ets:lookup(H#hist.table, H#hist.name) of
-        [] ->
-            throw(data_missing_from_ets);
-        [Counts] ->
-            Counts
-    end.
-
 value_from_index(H, Bucket_index, Sub_bucket_index) ->
     Sub_bucket_index bsl (Bucket_index + H#hist.unit_magnitude).
 
@@ -347,32 +348,34 @@ size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) ->
         end,
     1 bsl (H#hist.unit_magnitude + Adjusted_bucket_index).
 
-
--record(it_state,
-        {index = -1,
-         count_at_index = 0,
-         count_to_index = 0
-        }).
+%%
+%% Iteration
+%%
 
 -record(it,
         {h :: #hist{},
          total_count,
-         counts,
-         state = #it_state{} :: #it_state{}
+         counts
         }).
 
 iterator(H) ->
-    Counts = get_counts(H),
-    #it{h = H, counts = Counts, total_count = element(?TOTAL_COUNT_INDEX, Counts)}.
+    Counts = storage_get_counts(H),
+    #it{h = H,
+        counts = Counts,
+        total_count = element(?TOTAL_COUNT_INDEX, Counts)}.
+
 do_total_count(It) ->
     It#it.total_count.
 
 do_mean(It) ->
-    case It#it.total_count =:= 0 of
-        true -> 0;
-        false ->
-            Total = do_mean_loop(It, 0, 0, 0),
-            Total / It#it.total_count
+    case It#it.total_count of
+        0 -> 0;
+        TotalCount ->
+            TotalSum = do_mean_loop(It, 0, 0, 0),
+            Mean = TotalSum / TotalCount,
+
+            %% the NIF does this rounding on the value returned from c code
+            round_to_significant_figures(Mean, It#it.h#hist.precision)
     end.
 
 do_mean_loop(It, Index, CountToIndex, Total0) ->
