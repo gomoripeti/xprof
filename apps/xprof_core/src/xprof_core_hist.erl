@@ -115,38 +115,38 @@ do_new(Table, Min, Max, Precision)
   when Min > 0 andalso Max > Min
        andalso 1 =< Precision andalso Precision =< 5 ->
 
-    Largest_value_with_single_unit_resolution = 2 * math:pow(10, Precision),
-    Sub_bucket_count_magnitude = int_ceil(math:log2(Largest_value_with_single_unit_resolution)),
+    LargestValueWithSingleUnitResolution = 2 * math:pow(10, Precision),
+    SubBucketCountMagnitude = int_ceil(math:log2(LargestValueWithSingleUnitResolution)),
 
-    Sub_bucket_half_count_magnitude =
-        case Sub_bucket_count_magnitude < 1 of
+    SubBucketHalfCountMagnitude =
+        case SubBucketCountMagnitude < 1 of
             true -> 1;
-            false -> Sub_bucket_count_magnitude - 1
+            false -> SubBucketCountMagnitude - 1
         end,
 
-    Unit_magnitude =
+    UnitMagnitude =
         case int_floor(math:log2(Min)) of
             N when N < 0 -> 0;
             N -> N
         end,
 
-    Sub_bucket_count = round(math:pow(2, Sub_bucket_half_count_magnitude + 1)),
-    Sub_bucket_half_count = round(Sub_bucket_count / 2),
-    Sub_bucket_mask = (Sub_bucket_count - 1) bsl Unit_magnitude,
+    SubBucketCount = round(math:pow(2, SubBucketHalfCountMagnitude + 1)),
+    SubBucketHalfCount = round(SubBucketCount / 2),
+    SubBucketMask = (SubBucketCount - 1) bsl UnitMagnitude,
 
-    Bucket_count = calculate_bucket_count(Sub_bucket_count bsl Unit_magnitude, Max, 1),
-    Counts_length = round((Bucket_count + 1) * (Sub_bucket_count / 2)),
+    BucketCount = calculate_bucket_count(SubBucketCount bsl UnitMagnitude, Max, 1),
+    CountsLength = round((BucketCount + 1) * (SubBucketCount / 2)),
 
     H = #hist{
            table = Table,
            name = hist_key,
-           bucket_count = Bucket_count,
-           counts_length = Counts_length,
-           unit_magnitude = Unit_magnitude,
-           sub_bucket_mask = Sub_bucket_mask,
-           sub_bucket_count = Sub_bucket_count,
-           sub_bucket_half_count = Sub_bucket_half_count,
-           sub_bucket_half_count_magnitude = Sub_bucket_half_count_magnitude,
+           bucket_count = BucketCount,
+           counts_length = CountsLength,
+           unit_magnitude = UnitMagnitude,
+           sub_bucket_mask = SubBucketMask,
+           sub_bucket_count = SubBucketCount,
+           sub_bucket_half_count = SubBucketHalfCount,
+           sub_bucket_half_count_magnitude = SubBucketHalfCountMagnitude,
 
            min = Min,
            max = Max,
@@ -263,11 +263,11 @@ round_to_significant_figures(V, Prec) ->
     Factor = math:pow(10.0, Prec - int_ceil(math:log10(abs(V)))),
     round(V * Factor) / Factor.
 
-calculate_bucket_count(Smallest_untrackable_value, Max, Bucket_count) ->
-    case Smallest_untrackable_value < Max of
-        false -> Bucket_count;
-        true -> calculate_bucket_count((Smallest_untrackable_value bsl 1),
-                                       Max, Bucket_count + 1)
+calculate_bucket_count(SmallestUntrackableValue, Max, BucketCount) ->
+    case SmallestUntrackableValue < Max of
+        false -> BucketCount;
+        true -> calculate_bucket_count((SmallestUntrackableValue bsl 1),
+                                       Max, BucketCount + 1)
     end.
 
 get_value_index(H, Value) ->
@@ -276,19 +276,19 @@ get_value_index(H, Value) ->
 
 get_bucket_indexes(H, Value) ->
     Ceiling = bit_length((Value bor H#hist.sub_bucket_mask), 0),
-    Bucket_index = Ceiling - H#hist.unit_magnitude - (H#hist.sub_bucket_half_count_magnitude + 1),
+    BucketIndex = Ceiling - H#hist.unit_magnitude - (H#hist.sub_bucket_half_count_magnitude + 1),
 
-    Sub_bucket_index = Value bsr (Bucket_index + H#hist.unit_magnitude),
-    {Bucket_index, Sub_bucket_index}.
+    SubBucketIndex = Value bsr (BucketIndex + H#hist.unit_magnitude),
+    {BucketIndex, SubBucketIndex}.
 
 get_bucket_indexes_from_index(H, Index) when Index < H#hist.sub_bucket_half_count ->
     {0, Index};
 get_bucket_indexes_from_index(H, Index) ->
     %%Magn = H#hist.sub_bucket_half_count_magnitude,
-    Bucket_index = (Index bsr H#hist.sub_bucket_half_count_magnitude) - 1,
-    Sub_bucket_index = (Index + H#hist.sub_bucket_half_count)
-        - ((Bucket_index + 1) bsl H#hist.sub_bucket_half_count_magnitude),
-    {Bucket_index, Sub_bucket_index}.
+    BucketIndex = (Index bsr H#hist.sub_bucket_half_count_magnitude) - 1,
+    SubBucketIndex = (Index + H#hist.sub_bucket_half_count)
+        - ((BucketIndex + 1) bsl H#hist.sub_bucket_half_count_magnitude),
+    {BucketIndex, SubBucketIndex}.
 
 bit_length(Value, N) when Value >= 32768 ->
     bit_length((Value bsr 16), N + 16);
@@ -313,40 +313,40 @@ bit_length(Value, N) ->
         false -> N4
     end.
 
-get_count_index(H, Bucket_index, Sub_bucket_index) ->
-    Bucket_base_index =
-        (Bucket_index + 1) bsl H#hist.sub_bucket_half_count_magnitude,
-    Offset_in_bucket = Sub_bucket_index - H#hist.sub_bucket_half_count,
-    Bucket_base_index + Offset_in_bucket.
+get_count_index(H, BucketIndex, SubBucketIndex) ->
+    BucketBaseIndex =
+        (BucketIndex + 1) bsl H#hist.sub_bucket_half_count_magnitude,
+    OffsetInBucket = SubBucketIndex - H#hist.sub_bucket_half_count,
+    BucketBaseIndex + OffsetInBucket.
 
-value_from_index(H, Bucket_index, Sub_bucket_index) ->
-    Sub_bucket_index bsl (Bucket_index + H#hist.unit_magnitude).
+value_from_index(H, BucketIndex, SubBucketIndex) ->
+    SubBucketIndex bsl (BucketIndex + H#hist.unit_magnitude).
 
-highest_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
-    next_non_equivalent_value(H, Bucket_index, Sub_bucket_index) - 1.
+highest_equivalent_value(H, BucketIndex, SubBucketIndex) ->
+    next_non_equivalent_value(H, BucketIndex, SubBucketIndex) - 1.
 
 lowest_equivalent_value(H, Value) ->
-    {Bucket_index, Sub_bucket_index} = get_bucket_indexes(H, Value),
-    lowest_equivalent_value(H, Bucket_index, Sub_bucket_index).
+    {BucketIndex, SubBucketIndex} = get_bucket_indexes(H, Value),
+    lowest_equivalent_value(H, BucketIndex, SubBucketIndex).
 
-lowest_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
-    value_from_index(H, Bucket_index, Sub_bucket_index).
+lowest_equivalent_value(H, BucketIndex, SubBucketIndex) ->
+    value_from_index(H, BucketIndex, SubBucketIndex).
 
-next_non_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
-    lowest_equivalent_value(H, Bucket_index, Sub_bucket_index)
-        + size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index).
+next_non_equivalent_value(H, BucketIndex, SubBucketIndex) ->
+    lowest_equivalent_value(H, BucketIndex, SubBucketIndex)
+        + size_of_equivalent_value_range(H, BucketIndex, SubBucketIndex).
 
-median_equivalent_value(H, Bucket_index, Sub_bucket_index) ->
-    lowest_equivalent_value(H, Bucket_index, Sub_bucket_index)
-        + (size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) bsr 1).
+median_equivalent_value(H, BucketIndex, SubBucketIndex) ->
+    lowest_equivalent_value(H, BucketIndex, SubBucketIndex)
+        + (size_of_equivalent_value_range(H, BucketIndex, SubBucketIndex) bsr 1).
 
-size_of_equivalent_value_range(H, Bucket_index, Sub_bucket_index) ->
-    Adjusted_bucket_index =
-        case Sub_bucket_index >= H#hist.sub_bucket_count of
-            true -> Bucket_index + 1;
-            false -> Bucket_index
+size_of_equivalent_value_range(H, BucketIndex, SubBucketIndex) ->
+    AdjustedBucketIndex =
+        case SubBucketIndex >= H#hist.sub_bucket_count of
+            true -> BucketIndex + 1;
+            false -> BucketIndex
         end,
-    1 bsl (H#hist.unit_magnitude + Adjusted_bucket_index).
+    1 bsl (H#hist.unit_magnitude + AdjustedBucketIndex).
 
 %%
 %% Iteration
