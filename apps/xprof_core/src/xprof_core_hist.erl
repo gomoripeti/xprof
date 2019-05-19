@@ -241,8 +241,7 @@ delete(H) ->
 %% @doc Get the total number of recorded values. This is O(1)
 -spec total_count(#hist{}) -> non_neg_integer().
 total_count(H) ->
-    Counts = storage_get_counts(H),
-    element(?TOTAL_COUNT_INDEX, Counts).
+    storage_get_total_counts(H).
 
 max(H) ->
     hd(do_get_multi_value(iterator(H), [max])).
@@ -294,13 +293,16 @@ storage_record(H, Index, N) ->
     ok.
 
 storage_get_counts(H) ->
-    list_to_tuple(storage_get_counts(H#hist.table, ?TOTAL_COUNT_INDEX + H#hist.counts_length, [])).
+    H#hist.table.
 
-storage_get_counts(_, 0, Acc) ->
-    Acc;
-storage_get_counts(Table, Index, Acc) ->
-    NewAcc = [atomics:get(Table, Index)|Acc],
-    storage_get_counts(Table, Index - 1, NewAcc).
+storage_get_total_counts(H) ->
+    atomics:get(H#hist.table, ?TOTAL_COUNT_INDEX).
+
+storage_count_at_index(Table, Index) ->
+    %% 1 is the total_count
+    %% the real count buckets start at 2
+    %% `Index' is zero based
+    atomics:get(Table, Index + ?TOTAL_COUNT_INDEX + 1).
 
 storage_reset(H) ->
     H#hist{table = create_row(H#hist.name, H#hist.counts_length)}.
@@ -421,7 +423,7 @@ iterator(H) ->
     Counts = storage_get_counts(H),
     #it{h = H,
         counts = Counts,
-        total_count = element(?TOTAL_COUNT_INDEX, Counts)}.
+        total_count = storage_get_total_counts(H)}.
 
 do_total_count(It) ->
     It#it.total_count.
@@ -511,11 +513,7 @@ get_value_from_index(H, percentile, Index) ->
     round_to_significant_figures(V, H#hist.precision).
 
 count_at_index(It, Index) ->
-    %% 1 is the name
-    %% 2 is the total_count
-    %% the real count buckets start at 3
-    %% Index is zero based
-    element(Index + ?TOTAL_COUNT_INDEX + 1, It#it.counts).
+    storage_count_at_index(It#it.counts, Index).
 
 %% ceil/1 and floor/1 were introduced in OTP 20
 -ifdef(ceil_floor).
