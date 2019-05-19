@@ -128,11 +128,11 @@ handle_event({trace_ts, Pid, Tag, MFA, RetOrExc, EndTime},
 
 take_snapshot(State = #state{hdr_ref = Ref, nomatch_count = NoMatch}) ->
     Snapshot = get_current_hist_stats(Ref, NoMatch),
-    xprof_core_hist:hdr_reset(Ref),
-    maybe_reset_nomatch_count(Snapshot, State, NoMatch).
+    ResetRef = xprof_core_hist:hdr_reset(Ref),
+    maybe_reset_nomatch_count(Snapshot, State#state{hdr_ref = ResetRef}, NoMatch).
 
-maybe_reset_nomatch_count(Snapshot, _State, _NoMatch = undefined) ->
-    Snapshot;
+maybe_reset_nomatch_count(Snapshot, State, _NoMatch = undefined) ->
+    {Snapshot, State};
 maybe_reset_nomatch_count(Snapshot, State, _) ->
     {Snapshot, State#state{nomatch_count = 0}}.
 

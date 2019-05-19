@@ -123,8 +123,8 @@ t_hdr_percentiles(Config) ->
     ok.
 
 t_hdr_reset(Config) ->
-    Raw = ?config(raw,Config),
-    xprof_core_hist:reset(Raw),
+    Raw0 = ?config(raw,Config),
+    Raw = xprof_core_hist:reset(Raw0),
     0 = xprof_core_hist:total_count(Raw),
     %% FIXME why is this an integer???
     %%0.0 = xprof_core_hist:percentile(Raw, 99.0),
@@ -144,7 +144,7 @@ t_issue_004(_Config) ->
     end || X <- lists:seq(0,10) ],
     {error, value_out_of_range} = xprof_core_hist:record(R, -1),
     {error, value_out_of_range} = xprof_core_hist:record(R, 11),
-    ok = xprof_core_hist:close(R).
+    _ = xprof_core_hist:close(R).
 
 t_issue_013(_Config) ->
     {ok,R} = xprof_core_hist:open(10,1),
@@ -153,11 +153,11 @@ t_issue_013(_Config) ->
     end || X <- lists:seq(0,10) ],
     {error, value_out_of_range} = xprof_core_hist:record(R, -1),
     {error, value_out_of_range} = xprof_core_hist:record(R, 11),
-    ok = xprof_core_hist:close(R).
+    _ = xprof_core_hist:close(R).
 
 t_use_after_close(_Config) ->
-    {ok, Closed} = xprof_core_hist:open(10, 1),
-    ok = xprof_core_hist:close(Closed),
+    {ok, Closed0} = xprof_core_hist:open(10, 1),
+    Closed = xprof_core_hist:close(Closed0),
 
     ?BADARG(xprof_core_hist:total_count(Closed)),
 

@@ -65,7 +65,7 @@
 
 -define(TABLE, ?MODULE).
 
--define(TOTAL_COUNT_INDEX, 2).
+-define(TOTAL_COUNT_INDEX, 1).
 
 -record(hist,
         {table,
@@ -112,7 +112,8 @@ hdr_record(HistRef, Value) ->
     hdr_histogram:record(HistRef, Value).
 
 hdr_reset(HistRef) ->
-    hdr_histogram:reset(HistRef).
+    ok = hdr_histogram:reset(HistRef),
+    HistRef.
 
 hdr_stats(HistRef) ->
     [{count, hdr_histogram:get_total_count(HistRef)},
@@ -137,14 +138,20 @@ open(Max, Prec) ->
 open(Name, Max, Prec) ->
     new_concurrent(Name, 1, Max, Prec).
 
+close(#hist{table = deleted}) ->
+    %% badarg if H was deleted (for compatibility)
+    error(badarg);
 close(H) ->
     delete(H).
 
 get_total_count(H) ->
     total_count(H).
 
+same(#hist{table = deleted}, _, _) ->
+    %% badarg if H was deleted (for compatibility)
+    error(badarg);
 same(H, A, B) ->
-    ets:first(H#hist.table), %% badarg if H was deleted (table does not exist)
+    atomics:info(H#hist.table), %% badarg if H was deleted (table is `undefined')
     lowest_equivalent_value(H, A) =:= lowest_equivalent_value(H, B).
 
 %%
@@ -203,8 +210,8 @@ do_new(Table, Min, Max, Precision)
            max = Max,
            precision = Precision
           },
-    reset(H),
-    {ok, H}.
+    H2 = reset(H),
+    {ok, H2}.
 
 record(H, Value) when is_integer(Value) ->
     do_record(H, Value, 1).
@@ -222,6 +229,9 @@ do_record(H, Value, N) ->
             storage_record(H, Index, N)
     end.
 
+reset(#hist{table = deleted}) ->
+    %% badarg if H was deleted (for compatibility)
+    error(badarg);
 reset(H) ->
     storage_reset(H).
 
@@ -273,36 +283,34 @@ stats(H) ->
 %%
 
 storage_new() ->
-    ets:new(?MODULE, [set, private]).
+    true.
 
-storage_new_concurrent(Name) ->
-    ets:new(Name, [set, public, {write_concurrency, true}]).
+storage_new_concurrent(_Name) ->
+    true.
 
 storage_record(H, Index, N) ->
-    ets:update_counter(H#hist.table, H#hist.name,
-                       [{?TOTAL_COUNT_INDEX, N},
-                        {Index + ?TOTAL_COUNT_INDEX + 1, N}]),
+    atomics:add(H#hist.table, ?TOTAL_COUNT_INDEX, N),
+    atomics:add(H#hist.table, Index + ?TOTAL_COUNT_INDEX + 1, N),
     ok.
 
 storage_get_counts(H) ->
-    case ets:lookup(H#hist.table, H#hist.name) of
-        [] ->
-            throw(data_missing_from_ets);
-        [Counts] ->
-            Counts
-    end.
+    list_to_tuple(storage_get_counts(H#hist.table, ?TOTAL_COUNT_INDEX + H#hist.counts_length, [])).
+
+storage_get_counts(_, 0, Acc) ->
+    Acc;
+storage_get_counts(Table, Index, Acc) ->
+    NewAcc = [atomics:get(Table, Index)|Acc],
+    storage_get_counts(Table, Index - 1, NewAcc).
 
 storage_reset(H) ->
-    ets:insert(H#hist.table, create_row(H#hist.name, H#hist.counts_length)),
-    ok.
+    H#hist{table = create_row(H#hist.name, H#hist.counts_length)}.
 
 storage_delete(H) ->
-    ets:delete(H#hist.table),
-    ok.
+    H#hist{table = deleted}.
 
-create_row(Name, Count) ->
-    %% counters come after name and total_count that are stored at the start
-    erlang:make_tuple(?TOTAL_COUNT_INDEX + Count, 0, [{1, Name}]).
+create_row(_Name, Count) ->
+    %% counters come after total_count that is stored at the start
+    atomics:new(?TOTAL_COUNT_INDEX + Count, [{signed, false}]).
 
 %%
 %% Calculations
