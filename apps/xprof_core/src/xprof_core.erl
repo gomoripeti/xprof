@@ -102,6 +102,7 @@ expand_query(Query) ->
     end.
 
 %% @doc Get loaded modules and functions (MFAs) that match the query string.
+%%
 %% Used for autocomplete suggestions on the GUI.
 -spec get_matching_mfas_pp(binary()) -> [MFA :: binary()].
 get_matching_mfas_pp(Query) ->
@@ -117,7 +118,9 @@ monitor_pp(Query) ->
     monitor_pp(Query, []).
 
 %% @doc Start monitoring based on the specified query string with additional
-%% parameters. Additional parameters have precedence overthe same keys in the
+%% parameters.
+%%
+%% Additional parameters have precedence overthe same keys in the
 %% query.
 -spec monitor_pp(binary(), [{binary(), binary()}])
                 -> ok | {error, Reason :: already_traced | string()}.
@@ -146,7 +149,9 @@ get_all_monitored() ->
     xprof_core_tracer:all_monitored().
 
 %% @doc Return metrics gathered for the given function since the given
-%% timestamp. Each item contains a timestamp and the corresponding histogram
+%% timestamp.
+%%
+%% Each item contains a timestamp and the corresponding histogram
 %% metrics values.
 -spec get_data(xprof_core:mfa_id(), timestamp()) -> [Item] | {error, not_found}
   when Item :: [{time, timestamp()} | {HistKey, number()}],
@@ -156,6 +161,8 @@ get_all_monitored() ->
 get_data(MFA, TimeStamp) ->
     xprof_core_trace_handler:data(MFA, TimeStamp).
 
+%% @doc Return metrics gathered for the given function formatted
+%% according to the active syntax mode.
 get_data_pp(MFA, TimeStamp) ->
     case xprof_core_trace_handler:data(MFA, TimeStamp) of
         {error, _} = Error ->
@@ -178,7 +185,7 @@ get_called_funs(MFA) ->
     xprof_core_vm_info:get_called_funs(MFA).
 
 %% @doc Return list of called functions formatted according to the
-%% active syntax mode
+%% active syntax mode.
 -spec get_called_funs_pp(xprof_core:mfa_id()) -> [MFA :: binary()].
 get_called_funs_pp(MFA) ->
     ModeCb = xprof_core_lib:get_mode_cb(),
@@ -189,14 +196,16 @@ get_called_funs_pp(MFA) ->
 %% Global trace status
 %%
 
-%% @doc Turn on tracing for one or all processes. Additionally tracing can be
-%% paused and resumed for the same process specification (one or all) that was
-%% given earlier.
+%% @doc Turn on tracing for one or all processes.
+%%
+%% Additionally tracing can be paused and resumed for the same process
+%% specification (one or all) that was given earlier.
 -spec trace(pid() | all | pause | resume) -> ok.
 trace(PidOrSpec) ->
     xprof_core_tracer:trace(PidOrSpec).
 
 %% @doc Return current tracing state.
+%%
 %% (The `initialized' status is basically the same as `paused', additionally
 %%  meaning that no tracing was started yet since xprof was started)
 -spec get_trace_status() -> {pid() | all, Status :: initialized | running | paused | overflow}.
@@ -285,20 +294,22 @@ rr(Mod) ->
     xprof_core_records:load_records(Mod).
 
 %% @doc Remove all record definitions.
-%% (similar to shell command ```rf('_')''')
+%% (similar to shell command `` rf('_') '')
 -spec rf() -> ok.
 rf() ->
     xprof_core_records:forget_records().
 
-%% @doc Remove selected record definitions. RecNames is a record name or a
-%% list of record names. To remove all record definitions, use '_'.
+%% @doc Remove selected record definitions.
+%%
+%% The argument can be a record name or a list of record names. To
+%% remove all record definitions, use `` '_' ''.
 %% (similar to shell command `rf/1')
 -spec rf(atom() | [atom()]) -> ok.
 rf(RecNameOrNames) ->
     xprof_core_records:forget_records(RecNameOrNames).
 
 %% @doc Return all stored record definitions.
-%% (Similar to shell command `rl()')
+%% (Similar to shell command `rl/0')
 -spec rl() -> [tuple()].
 rl() ->
     xprof_core_records:get_record_defs().
@@ -312,7 +323,9 @@ rl() ->
 set_mode(Mode) ->
     xprof_core_lib:set_mode(Mode).
 
-%% @doc Get syntax mode, if not set explicitely it will be autodetected.
+%% @doc Get syntax mode.
+%%
+%% If not set explicitely it will be autodetected.
 -spec get_mode() -> xprof_core:mode().
 get_mode() ->
     xprof_core_lib:get_mode().
