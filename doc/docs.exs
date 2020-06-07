@@ -8,7 +8,7 @@
   output: "doc/html/",
   assets: "doc/assets",
   logo: "./apps/xprof_gui/priv/build/xprof_icon.png",
+  proglang: "erlang",
   source_url: "https://github.com/Appliscale/xprof",
-  source_ref: "release_2.0",
   homepage_url: "http://xprof.appliscale.io",
 ]

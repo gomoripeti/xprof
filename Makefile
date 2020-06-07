@@ -1,7 +1,7 @@
 JS_PRIV=apps/xprof_gui/priv
 BIN_DIR:=node_modules/.bin
 VERSION:=$(shell grep vsn apps/xprof/src/xprof.app.src | cut -d '"' -f 2)
-DOC_EBIN_DIR=./doc/ebin
+DOC_EBIN_DIR=./_build/docs/lib/xprof_core/ebin/
 
 # this will update cowboy version based on rebar.config overwriting the lock file
 ifdef COWBOY_VERSION
@@ -47,7 +47,8 @@ doc:
 
 ~/.mix/escripts/ex_doc:
 	# mix escript.install hex ex_doc --force
-	mix escript.install github elixir-lang/ex_doc branch wm-erlang
+	# ex_doc requires Elixir ~> 1.10
+	mix escript.install github erszcz/ex_doc branch erlang
 
 ./doc/src/readme.md: README.md
 	sed -e 's|(doc/src/querysyntax.md)|(querysyntax.html)|' \
@@ -58,12 +59,11 @@ doc:
 # Older versions set source in compile module_info to `_build/docs/lib/xprof_core/src/xprof_core.erl`
 # instead of `apps/xprof_core/src/xprof_core.erl`
 # which results in wrong links in ex_doc to github source code
-$(DOC_EBIN_DIR)/xprof_core.beam: ./apps/xprof_core/src/xprof_core.erl _build/docs/lib/xprof_core/ebin/xprof_core.beam
-	./rebar3 as docs compile
-	mkdir -p $(DOC_EBIN_DIR)
-	cp _build/docs/lib/xprof_core/ebin/xprof_core.beam $(DOC_EBIN_DIR)/xprof_core.beam
+$(DOC_EBIN_DIR)/../doc/chunks/xprof_core.chunk: ./apps/xprof_core/src/xprof_core.erl
+	rebar3 as docs compile
+	ls _build/docs/lib/xprof_core/doc/chunks/* | grep -v xprof_core.chunk | xargs rm
 
-gen_ex_doc: ~/.mix/escripts/ex_doc ./doc/docs.exs ./doc/src/readme.md $(DOC_EBIN_DIR)/xprof_core.beam
+gen_ex_doc: ~/.mix/escripts/ex_doc ./doc/docs.exs ./doc/src/readme.md $(DOC_EBIN_DIR)/../doc/chunks/xprof_core.chunk
 	~/.mix/escripts/ex_doc XProf $(VERSION) $(DOC_EBIN_DIR) -c ./doc/docs.exs
 
 dialyzer:
