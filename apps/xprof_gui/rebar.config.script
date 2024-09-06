@@ -40,7 +40,10 @@ JsonLib =
   fun(Config0) ->
           case os:getenv("XPROF_JSON_LIB") of
               false ->
-                  Config0;
+                  case erlang:function:exported(json, encode, 1) of
+                    true -> DeleteDep(jsone, Config2);
+                    false -> Config0
+                  end;
               JsonMod ->
                   Config1 = EnsureMacro('XPROF_JSON_LIB', list_to_atom(JsonMod), Config0),
                   Config2 = EnvToMacro("XPROF_JSON_ENC_FUN", Config1),

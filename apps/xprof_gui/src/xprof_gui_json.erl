@@ -3,7 +3,18 @@
 -export([encode/1]).
 
 -ifndef(XPROF_JSON_LIB).
+-ifdef(OTP_RELEASE).
+-if(OTP_RELEASE >= 27).
+%% OTP 27+
+-define(XPROF_JSON_LIB, json).
+-else.
+%% OTP 21-26
 -define(XPROF_JSON_LIB, jsone).
+-endif.
+-else.
+%% OTP 18-20
+-define(XPROF_JSON_LIB, jsone).
+-endif.
 -endif.
 
 -ifndef(XPROF_JSON_ENC_FUN).

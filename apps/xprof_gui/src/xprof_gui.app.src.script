@@ -1,7 +1,7 @@
-case os:getenv("XPROF_JSON_LIB") of
-    false ->
+case {os:getenv("XPROF_JSON_LIB"), erlang:function:exported(json, encode, 1)} of
+    {false, false} ->
         CONFIG;
-    JsonMod ->
+    _ ->
         %% Delete jsone from list of applications
         [{application, App, Opts}] = CONFIG,
         Apps = proplists:get_value(applications, Opts),
