@@ -1,9 +1,6 @@
 JS_PRIV=apps/xprof_gui/priv
 BIN_DIR:=node_modules/.bin
-VERSION:=$(shell grep vsn apps/xprof/src/xprof.app.src | cut -d '"' -f 2)
 REBAR3?=$(shell which rebar3 || echo ./rebar3)
-DOC_EBIN_DIR=./_build/docs/lib/xprof_core/ebin/
-DOC_CHUNKS_DIR=./_build/docs/lib/xprof_core/doc/chunks
 
 # this will update cowboy version based on rebar.config overwriting the lock file
 ifdef COWBOY_VERSION
@@ -65,27 +62,19 @@ test_thoas:
 doc:
 	$(REBAR3) edoc
 
-# ex_doc requires Elixir ~> 1.10
-~/.mix/escripts/ex_doc:
-	mix escript.install hex ex_doc --force
-
 ./doc/src/readme.md: README.md
 	sed -e 's|(doc/src/querysyntax.md)|(querysyntax.html)|' \
 	    -e 's|doc/assets/|assets/|' \
 	    -e '1 s|\[!\[.*||' README.md > ./doc/src/readme.md
 
-# This step requires a relatively new rebar3 (somewhere between 3.5.2 and 3.13.0)
-# Older versions set source in compile module_info to `_build/docs/lib/xprof_core/src/xprof_core.erl`
-# instead of `apps/xprof_core/src/xprof_core.erl`
-# which results in wrong links in ex_doc to github source code
-$(DOC_CHUNKS_DIR)/xprof_core.chunk: ./apps/xprof_core/src/xprof_core.erl
+gen_ex_doc: ./doc/src/readme.md
 	$(MAYBE_UPDATE_COWBOY)
 	$(MAYBE_UNLOCK_HIST)
-	rebar3 as docs edoc
-	ls $(DOC_CHUNKS_DIR)/* | grep -v xprof_core.chunk | xargs rm
-
-gen_ex_doc: ~/.mix/escripts/ex_doc ./doc/docs.exs ./doc/src/readme.md $(DOC_CHUNKS_DIR)/xprof_core.chunk
-	~/.mix/escripts/ex_doc XProf $(VERSION) $(DOC_EBIN_DIR) -c ./doc/docs.exs
+	$(REBAR3) ex_doc --app xprof_core
+	$(REBAR3) ex_doc --app xprof_gui
+	cp _build/docs/lib/xprof_core/ebin/xprof_core.beam _build/docs/lib/xprof/ebin
+	cp _build/docs/lib/xprof_gui/ebin/xprof_gui_rest.beam _build/docs/lib/xprof/ebin
+	$(REBAR3) ex_doc --app xprof
 
 dialyzer:
 	$(MAYBE_UPDATE_COWBOY)
