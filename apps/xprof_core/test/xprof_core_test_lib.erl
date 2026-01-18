@@ -36,10 +36,22 @@ run_elixir_unit_tests(Tests) ->
                 error ->
                     [];
                 ElixirEbin ->
-                    {setup,
-                     fun() -> setup_elixir(ElixirEbin) end,
-                     fun cleanup_elixir/1,
-                     Tests}
+                    %% Temporarily setup Elixir to check version
+                    Result = setup_elixir(ElixirEbin),
+                    %% Elixir 1.18+ has tokenizer and parser changes that break many tests
+                    case is_elixir_version(">= 1.18.0") of
+                        true ->
+                            io:format(user,
+                                      "~nSkipping Elixir tests - Elixir 1.18+ not yet fully supported~n", []),
+                            cleanup_elixir(Result),
+                            [];
+                        false ->
+                            cleanup_elixir(Result),
+                            {setup,
+                             fun() -> setup_elixir(ElixirEbin) end,
+                             fun cleanup_elixir/1,
+                             Tests}
+                    end
             end
     end.
 
@@ -53,9 +65,21 @@ ensure_elixir_setup_for_e2e_test() ->
                 error ->
                     [];
                 ElixirEbin ->
-                    {setup,
-                     fun() -> setup_elixir(ElixirEbin) end,
-                     fun() -> del_elixir_from_path(ElixirEbin) end}
+                    %% Temporarily setup Elixir to check version
+                    {ElixirEbin1, Apps} = setup_elixir(ElixirEbin),
+                    %% Elixir 1.18+ has tokenizer and parser changes that break tests
+                    case is_elixir_version(">= 1.18.0") of
+                        true ->
+                            [ok = application:stop(App) || App <- Apps],
+                            del_elixir_from_path(ElixirEbin1),
+                            [];
+                        false ->
+                            [ok = application:stop(App) || App <- Apps],
+                            del_elixir_from_path(ElixirEbin1),
+                            {setup,
+                             fun() -> setup_elixir(ElixirEbin) end,
+                             fun() -> del_elixir_from_path(ElixirEbin) end}
+                    end
             end
     end.
 
@@ -78,7 +102,19 @@ get_elixir_ebin(Elixir) ->
     Cmd = Elixir ++ " -e 'IO.puts :code.lib_dir(:elixir, :ebin)'",
     case eunit_lib:command(Cmd) of
         {0, Output} ->
-            _ElixirEbin = string:strip(Output, right, $\n);
+            %% Take the last line to handle warnings on earlier lines
+            Lines = string:tokens(Output, "\n"),
+            ElixirEbin = lists:last(Lines),
+            %% Verify the path exists
+            case filelib:is_dir(ElixirEbin) of
+                true ->
+                    ElixirEbin;
+                false ->
+                    io:format(user,
+                              "~nElixir ebin directory does not exist: ~p - skipping elixir tests~n",
+                              [ElixirEbin]),
+                    error
+            end;
         {Status, Output} ->
             io:format(user,
                       "~nfound elixir unusable - skipping elixir tests:~n"

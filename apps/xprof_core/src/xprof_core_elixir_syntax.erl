@@ -366,6 +366,9 @@ tokenizer(Str, StartColumn) ->
     unify_tokenizer_output(
       elixir_tokenizer:tokenize(Str, 1, StartColumn, [])).
 
+unify_tokenizer_output({ok, _Line, _Column, _Warnings1, Tokens, _Warnings2}) ->
+    %% Elixir 1.18+ format
+    {ok, Tokens};
 unify_tokenizer_output({ok, _Line, _Column, _Warnings, Tokens}) ->
     {ok, Tokens};
 unify_tokenizer_output({ok, Tokens}) ->
