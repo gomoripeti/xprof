@@ -126,6 +126,8 @@ get_cmd_callback(funlatency) ->
     xprof_core_cmd_funlatency;
 get_cmd_callback(argdist) ->
     xprof_core_cmd_argdist;
+get_cmd_callback(callcount) ->
+    xprof_core_cmd_callcount;
 get_cmd_callback(Cmd) ->
     throw({error, {unknown_command, Cmd}}).
 
@@ -330,7 +332,10 @@ cmds() ->
           desc = <<"Measure latency of function calls">>},
      #cmd{name = argdist,
           cb_mod = xprof_core_cmd_argdist,
-          desc = <<"Distribution of argument values">>}
+          desc = <<"Distribution of argument values">>},
+     #cmd{name = callcount,
+          cb_mod = xprof_core_cmd_callcount,
+          desc = <<"Measure function call count">>}
     ].
 
 prefix_tail(Prefix, Bin) ->

@@ -129,7 +129,9 @@ init([Name, Options, MFASpec, CmdCB]) ->
     {ok, CBState} = CmdCB:init(Options, MFASpec),
     init_storage(Name),
     %% add trace pattern with args capturing turned off
-    case capture_args_trace_off(MFASpec) of
+    case (erlang:function_exported(CmdCB, no_trace_pattern, 0) andalso
+          CmdCB:no_trace_pattern()) orelse
+        capture_args_trace_off(MFASpec) of
         0 ->
             %% should not happen after ensure_mfa
             {stop, {no_match_mfaspec, MFASpec}};
