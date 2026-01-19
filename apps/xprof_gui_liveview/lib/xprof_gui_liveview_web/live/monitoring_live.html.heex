@@ -152,9 +152,86 @@
               <div class="text-xs text-base-content/70">
                 <%= monitored.query %>
               </div>
-              <%!-- Placeholder for graph/stats --%>
-              <div class="bg-base-200 rounded-lg h-64 flex items-center justify-center mt-4">
-                <span class="text-base-content/50">Graph placeholder</span>
+              <%!-- Statistics Table --%>
+              <div class="bg-base-200 rounded-lg mt-4 overflow-hidden">
+                <%= if monitored.stats do %>
+                  <div class="overflow-x-auto">
+                    <table class="table table-xs table-pin-rows">
+                      <thead>
+                        <tr>
+                          <th class="bg-base-300">Metric</th>
+                          <th class="bg-base-300 text-right">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <%= if monitored.stats[:count] do %>
+                          <tr>
+                            <td class="font-semibold">Count</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:count] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:min] do %>
+                          <tr>
+                            <td>Min (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:min] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:mean] do %>
+                          <tr>
+                            <td>Mean (μs)</td>
+                            <td class="text-right font-mono"><%= Float.round(monitored.stats[:mean] / 1, 2) %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:median] do %>
+                          <tr>
+                            <td>Median (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:median] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:p50] do %>
+                          <tr>
+                            <td>P50 (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:p50] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:p75] do %>
+                          <tr>
+                            <td>P75 (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:p75] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:p90] do %>
+                          <tr>
+                            <td>P90 (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:p90] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:p99] do %>
+                          <tr>
+                            <td>P99 (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:p99] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:max] do %>
+                          <tr>
+                            <td>Max (μs)</td>
+                            <td class="text-right font-mono"><%= monitored.stats[:max] %></td>
+                          </tr>
+                        <% end %>
+                        <%= if monitored.stats[:time] do %>
+                          <tr class="text-xs opacity-60">
+                            <td>Last Update</td>
+                            <td class="text-right font-mono"><%= format_timestamp(monitored.stats[:time]) %></td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% else %>
+                  <div class="flex items-center justify-center h-32">
+                    <span class="text-base-content/50 text-sm">No data yet...</span>
+                  </div>
+                <% end %>
               </div>
               <div class="card-actions justify-between mt-4">
                 <button

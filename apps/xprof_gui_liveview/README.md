@@ -88,36 +88,60 @@ This Phoenix/Mix app lives inside a rebar3 umbrella project. Key integration poi
 - **Legacy**: Compiled JavaScript bundle served as static assets
 - **LiveView**: Server-side rendered templates with dynamic updates
 
+## Current Features
+
+### ✅ Implemented
+- **Core UI**: Phoenix LiveView-based interface on port 7890
+- **Function Monitoring**: Start/stop monitoring Erlang/Elixir functions
+- **Autocomplete**: Real-time function name completion using xprof_core
+  - Appends suggestions to existing query
+  - Regenerates suggestions after selection
+  - Hides dropdown when single match equals query
+- **Recent Query History**: Terminal-style command history with arrow keys
+- **Live Statistics Tables**: Real-time metrics display
+  - Count, Min, Mean, Median percentiles (P50, P75, P90, P99), Max
+  - Updates every 2 seconds
+  - Microsecond precision timing data
+- **Trace Control**: Global trace pause/resume
+- **Grid Layout**: 1-4 column grid for multiple monitored functions
+- **Input Modes**: Toggle between search and favourites (Ctrl+I)
+
+### 🚧 In Progress
+- Argument/result capture display
+- Favourites persistence
+- Additional keyboard shortcuts
+
 ## Roadmap
 
-### Phase 1: Core Functionality ✓
+### Phase 1: Core Functionality ✅
 - [x] Create Phoenix skeleton app
 - [x] Configure port 7890
 - [x] Integrate with xprof_core
-- [ ] Basic layout matching React GUI
+- [x] Basic layout matching React GUI
 
-### Phase 2: Tracing Interface
-- [ ] Function monitoring controls
-- [ ] Query input with autocomplete
-- [ ] Start/stop tracing buttons
-- [ ] Recent queries and favourites
+### Phase 2: Tracing Interface ✅
+- [x] Function monitoring controls (start/stop)
+- [x] Query input with real autocomplete
+- [x] Start/stop tracing buttons
+- [x] Recent queries tracking
+- [x] Favourites UI (persistence pending)
 
-### Phase 3: Data Visualization
-- [ ] Real-time statistics graphs (percentiles, call counts)
-- [ ] HDR histogram visualization
+### Phase 3: Data Visualization 🔄
+- [x] Real-time statistics tables (percentiles, call counts)
+- [ ] HDR histogram visualization (graphs skipped for now)
 - [ ] Argument/result capture display
 - [ ] Function call tree
 
 ### Phase 4: Advanced Features
-- [ ] Keyboard shortcuts (Ctrl+i, arrows, etc.)
-- [ ] Multiple graph comparison
+- [x] Keyboard shortcuts (Ctrl+I, arrows for history/autocomplete)
+- [ ] Multiple function comparison
 - [ ] Export/import functionality
 - [ ] Dark mode
 
 ### Phase 5: Polish & Migration
 - [ ] Match exact UX of React GUI
 - [ ] Performance optimization
-- [ ] Documentation
+- [ ] Full test coverage
 - [ ] Deprecate React GUI
 
 ## Configuration

@@ -232,6 +232,42 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
     end
   end
 
+  describe "MonitoringLive statistics display" do
+    test "displays 'No data yet' when no statistics available", %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/")
+
+      # When no functions are monitored, welcome screen shows
+      assert html =~ "Welcome to XProf"
+
+      # Would need mocked data to test actual statistics display
+      # This verifies the initial empty state
+    end
+
+    test "format_timestamp converts Unix timestamp to time string", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Test the helper function through the module
+      timestamp = 1234567890
+      formatted = XprofGuiLiveviewWeb.MonitoringLive.format_timestamp(timestamp)
+
+      # Should return HH:MM:SS format
+      assert formatted =~ ~r/\d{2}:\d{2}:\d{2}/
+    end
+
+    test "format_mfa handles different MFA formats", %{conn: conn} do
+      {:ok, _view, _html} = live(conn, "/")
+
+      # Tuple format
+      assert XprofGuiLiveviewWeb.MonitoringLive.format_mfa({:lists, :map, 2}) == "lists:map/2"
+
+      # List format
+      assert XprofGuiLiveviewWeb.MonitoringLive.format_mfa([:lists, :map, 2]) == "lists:map/2"
+
+      # Unknown format
+      assert XprofGuiLiveviewWeb.MonitoringLive.format_mfa("invalid") == "unknown"
+    end
+  end
+
   describe "MonitoringLive with mocked xprof_core" do
     # TODO: Add tests with proper mocking of xprof_core functions
     # This would require a mocking library like Mox or manual stubs

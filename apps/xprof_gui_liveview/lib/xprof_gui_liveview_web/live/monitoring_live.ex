@@ -221,7 +221,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   @impl true
   def handle_info(:update_functions, socket) do
     monitored = fetch_monitored_functions()
-    {:noreply, assign(socket, monitored_functions: monitored)}
+
+    # Fetch statistics for each monitored function
+    monitored_with_stats = Enum.map(monitored, fn mon ->
+      stats = fetch_function_stats(mon.mfa)
+      Map.put(mon, :stats, stats)
+    end)
+
+    {:noreply, assign(socket, monitored_functions: monitored_with_stats)}
   end
 
   @impl true
@@ -280,6 +287,43 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         []
     end
   end
+
+  defp fetch_function_stats(mfa) when is_tuple(mfa) do
+    # Get statistics for a specific function
+    # xprof_core:get_data/2 takes MFA and timestamp
+    # Use timestamp 0 to get all available data
+    try do
+      case :xprof_core.get_data(mfa, 0) do
+        {:error, :not_found} ->
+          nil
+
+        data when is_list(data) ->
+          # Data is a list of snapshots: [[{time, TS}, {min, V}, {max, V}, ...], ...]
+          # Get the most recent snapshot (last in list)
+          case List.last(data) do
+            nil -> nil
+            snapshot -> format_stats_snapshot(snapshot)
+          end
+
+        _ ->
+          nil
+      end
+    rescue
+      e ->
+        Logger.error("Failed to fetch stats for #{inspect(mfa)}: #{inspect(e)}")
+        nil
+    end
+  end
+
+  defp fetch_function_stats(_), do: nil
+
+  defp format_stats_snapshot(snapshot) when is_list(snapshot) do
+    # Convert snapshot proplist to map for easier access in templates
+    # snapshot = [{time, TS}, {count, N}, {min, V}, {mean, V}, {max, V}, {p50, V}, ...]
+    Enum.into(snapshot, %{})
+  end
+
+  defp format_stats_snapshot(_), do: nil
 
   defp fetch_favourites do
     # TODO: Get favourites list from xprof_gui_favourites
@@ -501,6 +545,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   def format_mfa(_), do: "unknown"
+
+  def format_timestamp(timestamp) when is_integer(timestamp) do
+    # Convert Unix timestamp (seconds) to formatted time
+    datetime = DateTime.from_unix!(timestamp)
+    Calendar.strftime(datetime, "%H:%M:%S")
+  end
+
+  def format_timestamp(_), do: ""
 
   defp parse_mfa(mfa_str) when is_binary(mfa_str) do
     # Parse "module:function/arity" string into {module, function, arity} tuple
