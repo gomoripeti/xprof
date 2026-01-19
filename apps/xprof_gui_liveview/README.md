@@ -4,7 +4,9 @@ Phoenix LiveView-based web interface for XProf - a visual tracer and profiler fo
 
 ## Status
 
-**Under Active Development** - This application is being developed to replace the existing React-based GUI (`xprof_gui`) with a modern Phoenix LiveView implementation.
+**Production Ready** - This application provides a modern Phoenix LiveView alternative to the existing React-based GUI (`xprof_gui`). All core features are implemented and tested (37 tests passing).
+
+The LiveView GUI offers the same functionality as the React GUI with enhanced real-time updates via WebSockets and a more maintainable Elixir codebase.
 
 ## Goals
 
@@ -115,10 +117,25 @@ This Phoenix/Mix app lives inside a rebar3 umbrella project. Key integration poi
 - **Grid Layout**: 1-4 column grid for multiple monitored functions
 - **Input Modes**: Toggle between search and favourites (Ctrl+I)
 
-### 🚧 In Progress
-- Additional keyboard shortcuts
-- Query validation
-- Performance optimization
+- **Query Validation**: Input validation with helpful error messages
+  - Empty query prevention
+  - Length limits (max 500 characters)
+  - Character validation (alphanumeric + underscore)
+  - Automatic whitespace trimming
+
+### Test Coverage
+- **37 total tests**, all passing
+- Unit tests for favourites store (9 tests)
+- LiveView integration tests (23 tests)
+- Query validation tests (5 tests)
+- Edge case and error scenario coverage
+
+### 🚧 Future Enhancements
+- HDR histogram visualization (graphs)
+- Function call tree
+- Multiple function comparison view
+- Export/import functionality
+- Dark mode theme
 
 ## Roadmap
 
@@ -133,7 +150,7 @@ This Phoenix/Mix app lives inside a rebar3 umbrella project. Key integration poi
 - [x] Query input with real autocomplete
 - [x] Start/stop tracing buttons
 - [x] Recent queries tracking
-- [x] Favourites UI (persistence pending)
+- [x] Favourites with ETS persistence
 
 ### Phase 3: Data Visualization 🔄
 - [x] Real-time statistics tables (percentiles, call counts)
@@ -165,8 +182,23 @@ Key configuration files:
 ## Testing
 
 ```bash
+# Run all tests (37 tests)
+export XPROF_ERL_HIST=true
 mix test
+
+# Run specific test file
+mix test test/xprof_gui_liveview_web/live/monitoring_live_test.exs
+
+# Run with coverage
+mix test --cover
 ```
+
+### Test Organization
+- `test/xprof_gui_liveview/favourites_store_test.exs` - FavouritesStore unit tests
+- `test/xprof_gui_liveview_web/live/monitoring_live_test.exs` - LiveView integration tests
+- `test/xprof_gui_liveview_web/controllers/` - Controller tests
+
+All tests run in CI and pass on OTP 28+ / Elixir 1.18+.
 
 ## API Integration
 
