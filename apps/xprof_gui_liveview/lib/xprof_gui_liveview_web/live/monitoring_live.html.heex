@@ -243,13 +243,31 @@
                   <.icon name="hero-star" class="w-4 h-4" />
                 </button>
                 <div class="flex gap-2">
-                  <button class="btn btn-sm btn-ghost" title="View statistics">
-                    <.icon name="hero-chart-bar" class="w-4 h-4" />
-                    Stats
-                  </button>
-                  <button class="btn btn-sm btn-ghost" title="Capture calls">
-                    <.icon name="hero-document-text" class="w-4 h-4" />
+                  <button
+                    phx-click="start_capture"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-sm btn-ghost"
+                    title="Start capturing calls"
+                  >
+                    <.icon name="hero-play" class="w-4 h-4" />
                     Capture
+                  </button>
+                  <button
+                    phx-click="view_capture"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-sm btn-ghost"
+                    title="View captured calls"
+                  >
+                    <.icon name="hero-document-text" class="w-4 h-4" />
+                    View
+                  </button>
+                  <button
+                    phx-click="stop_capture"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-sm btn-ghost"
+                    title="Stop capturing calls"
+                  >
+                    <.icon name="hero-stop" class="w-4 h-4" />
                   </button>
                   <button
                     phx-click="demonitor"
@@ -262,6 +280,47 @@
                   </button>
                 </div>
               </div>
+
+              <%!-- Captured Data Display --%>
+              <%= if @capture_data[monitored.mfa_str] do %>
+                <div class="mt-4">
+                  <div class="divider divider-start text-xs">Captured Calls</div>
+                  <% capture = @capture_data[monitored.mfa_str] %>
+                  <div class="text-xs mb-2 opacity-70">
+                    Capture ID: <%= capture.spec.capture_id %> |
+                    Threshold: <%= capture.spec.threshold %>ms |
+                    Limit: <%= capture.spec.limit %> |
+                    <%= if capture.spec.has_more, do: "Capturing...", else: "Complete" %>
+                  </div>
+                  <div class="overflow-x-auto max-h-96">
+                    <table class="table table-xs table-zebra">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Time (ms)</th>
+                          <th>Args</th>
+                          <th>Result</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <%= for item <- capture.items do %>
+                          <tr>
+                            <td class="font-mono"><%= item.index %></td>
+                            <td class="font-mono"><%= item.call_time_ms %></td>
+                            <td class="font-mono text-xs"><%= item.args %></td>
+                            <td class="font-mono text-xs"><%= item.result %></td>
+                          </tr>
+                        <% end %>
+                      </tbody>
+                    </table>
+                    <%= if length(capture.items) == 0 do %>
+                      <div class="text-center py-4 text-sm opacity-50">
+                        No calls captured yet
+                      </div>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
             </div>
           </div>
         <% end %>

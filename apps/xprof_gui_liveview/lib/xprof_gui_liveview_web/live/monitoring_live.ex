@@ -24,6 +24,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
      |> assign(:grid, 1)
      |> assign(:favourites, [])
      |> assign(:recent_queries, [])
+     |> assign(:capture_data, %{})
      |> fetch_initial_data()}
   end
 
@@ -167,6 +168,55 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   def handle_event("switch_grid", %{"grid" => grid_str}, socket) do
     grid = String.to_integer(grid_str)
     {:noreply, assign(socket, grid: grid)}
+  end
+
+  @impl true
+  def handle_event("start_capture", %{"mfa" => mfa_str}, socket) do
+    mfa = parse_mfa(mfa_str)
+
+    # Start capture with default threshold (0ms) and limit (100 calls)
+    case start_capture(mfa, 0, 100) do
+      {:ok, capture_id} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Started capturing calls for #{format_mfa(mfa)} (ID: #{capture_id})")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to start capture: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("stop_capture", %{"mfa" => mfa_str}, socket) do
+    mfa = parse_mfa(mfa_str)
+
+    case stop_capture(mfa) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Stopped capturing calls for #{format_mfa(mfa)}")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to stop capture: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("view_capture", %{"mfa" => mfa_str}, socket) do
+    mfa = parse_mfa(mfa_str)
+
+    # Fetch captured data and store in socket state
+    case fetch_captured_data(mfa, 0) do
+      {:ok, spec, items} ->
+        capture_data = Map.put(socket.assigns.capture_data, mfa_str, %{spec: spec, items: items})
+        {:noreply, assign(socket, capture_data: capture_data)}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :info, "No captured data for #{format_mfa(mfa)}")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to fetch capture data: #{inspect(reason)}")}
+    end
   end
 
   @impl true
@@ -406,6 +456,78 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         Logger.error("Failed to toggle trace status to #{inspect(spec)}: #{inspect(e)}")
         "paused"
     end
+  end
+
+  defp start_capture(mfa, threshold, limit) when is_tuple(mfa) do
+    # Start capturing function calls
+    # xprof_core:capture/3 returns {:ok, CaptureId} or {:error, Reason}
+    try do
+      :xprof_core.capture(mfa, threshold, limit)
+    rescue
+      e ->
+        Logger.error("Failed to start capture for #{inspect(mfa)}: #{inspect(e)}")
+        {:error, e}
+    end
+  end
+
+  defp stop_capture(mfa) when is_tuple(mfa) do
+    # Stop capturing function calls
+    try do
+      :xprof_core.capture_stop(mfa)
+    rescue
+      e ->
+        Logger.error("Failed to stop capture for #{inspect(mfa)}: #{inspect(e)}")
+        {:error, e}
+    end
+  end
+
+  defp fetch_captured_data(mfa, offset) when is_tuple(mfa) do
+    # Fetch captured call data
+    # Returns: {:ok, {CaptureId, Threshold, Limit, HasMore}, Items} or {:error, Reason}
+    # Items: [{Index, Pid, CallTimeMs, Args, Result}, ...]
+    try do
+      case :xprof_core.get_captured_data(mfa, offset) do
+        {:ok, {capture_id, threshold, limit, has_more}, items} ->
+          spec = %{
+            capture_id: capture_id,
+            threshold: threshold,
+            limit: limit,
+            has_more: has_more
+          }
+
+          formatted_items =
+            Enum.map(items, fn {index, pid, call_time_ms, args, result} ->
+              %{
+                index: index,
+                pid: inspect(pid),
+                call_time_ms: call_time_ms,
+                args: inspect(args, limit: 50, pretty: true),
+                result: format_result(result)
+              }
+            end)
+
+          {:ok, spec, formatted_items}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    rescue
+      e ->
+        Logger.error("Failed to fetch captured data for #{inspect(mfa)}: #{inspect(e)}")
+        {:error, e}
+    end
+  end
+
+  defp format_result({:return_from, term}) do
+    "=> #{inspect(term, limit: 50, pretty: true)}"
+  end
+
+  defp format_result({:exception_from, {class, reason}}) do
+    "⚠ #{class}: #{inspect(reason, limit: 50, pretty: true)}"
+  end
+
+  defp format_result(other) do
+    inspect(other, limit: 50, pretty: true)
   end
 
   defp format_monitored_function({mfa, query}) when is_tuple(mfa) do

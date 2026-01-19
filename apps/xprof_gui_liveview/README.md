@@ -102,14 +102,19 @@ This Phoenix/Mix app lives inside a rebar3 umbrella project. Key integration poi
   - Count, Min, Mean, Median percentiles (P50, P75, P90, P99), Max
   - Updates every 2 seconds
   - Microsecond precision timing data
+- **Call Capture**: Capture and view function call arguments and results
+  - Start/stop capture with configurable threshold and limit
+  - View captured calls with arguments, results, and execution time
+  - Displays exceptions with warnings
+  - Incremental data fetching support
 - **Trace Control**: Global trace pause/resume
 - **Grid Layout**: 1-4 column grid for multiple monitored functions
 - **Input Modes**: Toggle between search and favourites (Ctrl+I)
 
 ### 🚧 In Progress
-- Argument/result capture display
 - Favourites persistence
 - Additional keyboard shortcuts
+- Query validation
 
 ## Roadmap
 
@@ -129,7 +134,7 @@ This Phoenix/Mix app lives inside a rebar3 umbrella project. Key integration poi
 ### Phase 3: Data Visualization 🔄
 - [x] Real-time statistics tables (percentiles, call counts)
 - [ ] HDR histogram visualization (graphs skipped for now)
-- [ ] Argument/result capture display
+- [x] Argument/result capture display
 - [ ] Function call tree
 
 ### Phase 4: Advanced Features
