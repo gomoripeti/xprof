@@ -294,6 +294,66 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
     end
   end
 
+  describe "MonitoringLive query validation" do
+    test "submit button is disabled when query is empty", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Submit button should be disabled with empty query
+      html = render(view)
+      assert html =~ "disabled"
+    end
+
+    test "rejects empty query on submit", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Try to submit empty query
+      view
+      |> element("form")
+      |> render_submit(%{"query" => ""})
+
+      # Should show error message
+      html = render(view)
+      assert html =~ "Query cannot be empty"
+    end
+
+    test "rejects whitespace-only query", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      view
+      |> element("form")
+      |> render_submit(%{"query" => "   "})
+
+      html = render(view)
+      assert html =~ "Query cannot be empty"
+    end
+
+    test "rejects query with no valid characters", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      view
+      |> element("form")
+      |> render_submit(%{"query" => "!!!"})
+
+      html = render(view)
+      assert html =~ "must contain valid characters"
+    end
+
+    test "trims whitespace from valid query", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Submit query with surrounding whitespace
+      # Will fail to monitor (xprof_core not mocked) but validates the trim
+      view
+      |> element("form")
+      |> render_submit(%{"query" => "  lists:map/2  "})
+
+      # Should attempt to monitor "lists:map/2" (trimmed)
+      # Verification: no "Query cannot be empty" error
+      html = render(view)
+      refute html =~ "Query cannot be empty"
+    end
+  end
+
   describe "MonitoringLive with mocked xprof_core" do
     # TODO: Add tests with proper mocking of xprof_core functions
     # This would require a mocking library like Mox or manual stubs

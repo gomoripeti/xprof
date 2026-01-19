@@ -71,36 +71,51 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
 
   @impl true
   def handle_event("submit_query", %{"query" => query}, socket) do
-    # Add to recent queries history (only on submit, not on every keystroke)
-    recent_queries = socket.assigns.recent_queries || []
-    last_query = if recent_queries == [], do: nil, else: hd(recent_queries)
+    # Validate query before processing
+    case validate_query(query) do
+      {:ok, validated_query} ->
+        # Add to recent queries history (only on submit, not on every keystroke)
+        recent_queries = socket.assigns.recent_queries || []
+        last_query = if recent_queries == [], do: nil, else: hd(recent_queries)
 
-    updated_recent = if String.length(query) > 0 and query != last_query do
-      [query | Enum.take(recent_queries, 19)]  # Keep last 20
-    else
-      recent_queries
-    end
+        updated_recent =
+          if String.length(validated_query) > 0 and validated_query != last_query do
+            [validated_query | Enum.take(recent_queries, 19)]  # Keep last 20
+          else
+            recent_queries
+          end
 
-    # Start monitoring the function
-    case monitor_function(query) do
-      :ok ->
-        monitored = fetch_monitored_functions()
-        {:noreply,
-         socket
-         |> assign(query: "", functions: [], monitored_functions: monitored, recent_queries: updated_recent, history_position: -1)
-         |> put_flash(:info, "Started monitoring: #{query}")}
+        # Start monitoring the function
+        case monitor_function(validated_query) do
+          :ok ->
+            monitored = fetch_monitored_functions()
 
-      {:error, :already_traced} ->
-        {:noreply,
-         socket
-         |> assign(recent_queries: updated_recent)
-         |> put_flash(:info, "Function is already being monitored")}
+            {:noreply,
+             socket
+             |> assign(
+               query: "",
+               functions: [],
+               monitored_functions: monitored,
+               recent_queries: updated_recent,
+               history_position: -1
+             )
+             |> put_flash(:info, "Started monitoring: #{validated_query}")}
 
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> assign(recent_queries: updated_recent)
-         |> put_flash(:error, "Failed to monitor: #{inspect(reason)}")}
+          {:error, :already_traced} ->
+            {:noreply,
+             socket
+             |> assign(recent_queries: updated_recent)
+             |> put_flash(:info, "Function is already being monitored")}
+
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> assign(recent_queries: updated_recent)
+             |> put_flash(:error, "Failed to monitor: #{inspect(reason)}")}
+        end
+
+      {:error, message} ->
+        {:noreply, put_flash(socket, :error, message)}
     end
   end
 
@@ -557,6 +572,27 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   defp format_result(other) do
     inspect(other, limit: 50, pretty: true)
   end
+
+  defp validate_query(query) when is_binary(query) do
+    trimmed = String.trim(query)
+
+    cond do
+      String.length(trimmed) == 0 ->
+        {:error, "Query cannot be empty"}
+
+      String.length(trimmed) > 500 ->
+        {:error, "Query too long (max 500 characters)"}
+
+      # Basic sanity check: query should contain some alphanumeric characters
+      not String.match?(trimmed, ~r/[a-zA-Z0-9_]/) ->
+        {:error, "Query must contain valid characters (letters, numbers, or underscore)"}
+
+      true ->
+        {:ok, trimmed}
+    end
+  end
+
+  defp validate_query(_), do: {:error, "Invalid query format"}
 
   defp format_monitored_function({mfa, query}) when is_tuple(mfa) do
     # Format the monitored function data for display
