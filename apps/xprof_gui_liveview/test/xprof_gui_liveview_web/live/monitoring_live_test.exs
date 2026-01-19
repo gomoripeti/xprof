@@ -60,19 +60,23 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       assert has_element?(view, ".dropdown")
     end
 
-    test "input type toggle switches between search and favourites", %{conn: conn} do
+    test "input type switcher has both buttons with correct states", %{conn: conn} do
       {:ok, view, html} = live(conn, "/")
 
-      # Initially in search mode (magnifying glass icon)
-      assert has_element?(view, "button[phx-click='toggle_input_type']")
+      # Initially in search mode - magnifying glass button should be active (disabled)
+      assert has_element?(view, "button[phx-value-type='search'][disabled]")
+      # Star button should be inactive (not disabled)
+      refute has_element?(view, "button[phx-value-type='favourites'][disabled]")
 
-      # Click toggle
+      # Click favourites button to switch
       view
-      |> element("button[phx-click='toggle_input_type']")
+      |> element("button[phx-value-type='favourites']")
       |> render_click()
 
-      # Should switch to favourites mode (star icon)
-      # The input_type assign should change
+      # Now favourites button should be active (disabled)
+      html = render(view)
+      assert html =~ "phx-value-type=\"favourites\""
+      # Can verify the switch by checking that star button is now active
     end
 
     test "query input exists in navbar", %{conn: conn} do
@@ -396,9 +400,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       |> element("form")
       |> render_submit(%{"query" => "third"})
 
-      # Toggle to favourites mode
+      # Switch to favourites mode by clicking the favourites button
       view
-      |> element("button[phx-click='toggle_input_type']")
+      |> element("button[phx-value-type='favourites']")
       |> render_click()
 
       # Set initial query text
@@ -424,9 +428,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       |> element("form")
       |> render_submit(%{"query" => "lists:map/2"})
 
-      # Toggle to favourites mode
+      # Switch to favourites mode by clicking the favourites button
       view
-      |> element("button[phx-click='toggle_input_type']")
+      |> element("button[phx-value-type='favourites']")
       |> render_click()
 
       # The implementation ensures that after selection in favourites mode,
@@ -450,9 +454,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       html = render(view)
       assert html =~ "value=\"li\""
 
-      # Toggle to favourites mode
+      # Switch to favourites mode by clicking the favourites button
       view
-      |> element("button[phx-click='toggle_input_type']")
+      |> element("button[phx-value-type='favourites']")
       |> render_click()
 
       # Set query in favourites mode

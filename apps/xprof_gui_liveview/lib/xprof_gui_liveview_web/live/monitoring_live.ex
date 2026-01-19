@@ -184,7 +184,13 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   @impl true
+  def handle_event("toggle_input_type", %{"type" => type}, socket) do
+    new_type = String.to_existing_atom(type)
+    {:noreply, assign(socket, input_type: new_type, query: "", functions: [])}
+  end
+
   def handle_event("toggle_input_type", _params, socket) do
+    # For keyboard shortcut (Ctrl+I) - toggle between modes
     new_type = case socket.assigns.input_type do
       :search -> :favourites
       :favourites -> :search

@@ -31,35 +31,70 @@
         <% end %>
       </button>
 
-      <%!-- Favourites Toggle --%>
-      <button
-        type="button"
-        phx-click="toggle_input_type"
-        class="btn btn-sm btn-ghost"
-        title="Toggle favourites (Ctrl+I)"
-      >
-        <.icon name="hero-star" class="w-5 h-5" />
-      </button>
-
-      <%!-- Search Input --%>
+      <%!-- Input Group: Switcher + Search Input --%>
       <div class="form-control relative">
-        <form phx-submit="submit_query">
-          <input
-            type="text"
-            placeholder="Hello BEAMer! Search your favourites queries."
-            class="input input-sm w-[500px] bg-base-100 text-base-content border-base-300"
-            value={@query}
-            phx-change="update_query"
-            phx-keydown="key_down"
-            name="query"
-            autocomplete="off"
-            id="query-input"
-          />
-        </form>
+        <div class="join">
+          <%!-- Favourites Button --%>
+          <button
+            type="button"
+            phx-click="toggle_input_type"
+            phx-value-type="favourites"
+            class="btn btn-sm join-item border-0 transition-colors"
+            style={
+              if @input_type == :favourites do
+                "background-color: #798d8f; color: #fff;"
+              else
+                "background-color: #95a5a6; color: #fff;"
+              end
+            }
+            onmouseover={unless @input_type == :favourites, do: "this.style.backgroundColor='#798d8f'"}
+            onmouseout={unless @input_type == :favourites, do: "this.style.backgroundColor='#95a5a6'"}
+            disabled={@input_type == :favourites}
+            title="Favourites"
+          >
+            <.icon name="hero-star" class="w-5 h-5" />
+          </button>
+
+          <%!-- Search Button --%>
+          <button
+            type="button"
+            phx-click="toggle_input_type"
+            phx-value-type="search"
+            class="btn btn-sm join-item border-0 transition-colors"
+            style={
+              if @input_type == :search do
+                "background-color: #798d8f; color: #fff;"
+              else
+                "background-color: #95a5a6; color: #fff;"
+              end
+            }
+            onmouseover={unless @input_type == :search, do: "this.style.backgroundColor='#798d8f'"}
+            onmouseout={unless @input_type == :search, do: "this.style.backgroundColor='#95a5a6'"}
+            disabled={@input_type == :search}
+            title="Search"
+          >
+            <.icon name="hero-magnifying-glass" class="w-5 h-5" />
+          </button>
+
+          <%!-- Search Input --%>
+          <form phx-submit="submit_query" class="join-item">
+            <input
+              type="text"
+              placeholder="Hello BEAMer! Search your favourites queries."
+              class="input input-sm w-[500px] bg-base-100 text-base-content border-base-300"
+              value={@query}
+              phx-change="update_query"
+              phx-keydown="key_down"
+              name="query"
+              autocomplete="off"
+              id="query-input"
+            />
+          </form>
+        </div>
 
         <%!-- Autocomplete Dropdown --%>
         <%= if length(@functions) > 0 do %>
-          <div class="absolute top-full mt-1 w-[500px] bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50">
+          <div class="absolute top-full mt-1 w-[500px] bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50" style="left: 68px;">
             <ul class="menu menu-compact text-base-content">
               <%= for {func, index} <- Enum.with_index(@functions) do %>
                 <li>
@@ -79,7 +114,13 @@
 
       <%!-- Grid Selector --%>
       <div class="dropdown dropdown-end">
-        <label tabindex="0" class="btn btn-sm btn-ghost">
+        <label
+          tabindex="0"
+          class="btn btn-sm border-0 transition-colors"
+          style="background-color: #95a5a6; color: #fff;"
+          onmouseover="this.style.backgroundColor='#798d8f'"
+          onmouseout="this.style.backgroundColor='#95a5a6'"
+        >
           <.icon name="hero-squares-2x2" class="w-5 h-5" />
         </label>
         <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32 text-base-content">
@@ -365,10 +406,10 @@
     // Ctrl+I to toggle input type
     if (e.ctrlKey && e.key === 'i') {
       e.preventDefault();
-      // Find the toggle button and trigger a click
-      const toggleBtn = document.querySelector('[phx-click="toggle_input_type"]');
-      if (toggleBtn) {
-        toggleBtn.click();
+      // Find the inactive button (not disabled) and click it to switch modes
+      const activeBtn = document.querySelector('[phx-click="toggle_input_type"]:not([disabled])');
+      if (activeBtn) {
+        activeBtn.click();
       }
     }
   });
