@@ -98,7 +98,7 @@
                     phx-value-index={index}
                     class={if @position == index, do: "active"}
                   >
-                    <code class="text-xs"><%= func.label || func.value || func %></code>
+                    <code class="text-xs"><%= func.label || func.value %></code>
                   </a>
                 </li>
               <% end %>

@@ -46,7 +46,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         if String.length(query) >= 2 do
           filter_favourites(socket.assigns.favourites, query)
         else
-          socket.assigns.favourites
+          favourites_as_suggestions(socket.assigns.favourites)
         end
     end
 
@@ -276,7 +276,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           if String.length(updated_query) >= 2 do
             filter_favourites(socket.assigns.favourites, updated_query)
           else
-            socket.assigns.favourites
+            favourites_as_suggestions(socket.assigns.favourites)
           end
       end
 
@@ -462,6 +462,13 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       String.contains?(String.downcase(to_string(fav)), query_lower)
     end)
     |> Enum.map(fn fav -> %{value: to_string(fav), label: to_string(fav)} end)
+  end
+
+  defp favourites_as_suggestions(favourites) do
+    # Wrap favourites as maps for autocomplete suggestions
+    Enum.map(favourites, fn fav ->
+      %{value: to_string(fav), label: to_string(fav)}
+    end)
   end
 
   defp monitor_function(query) do
@@ -700,7 +707,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           if String.length(updated_query) >= 2 do
             filter_favourites(socket.assigns.favourites, updated_query)
           else
-            socket.assigns.favourites
+            favourites_as_suggestions(socket.assigns.favourites)
           end
       end
 
