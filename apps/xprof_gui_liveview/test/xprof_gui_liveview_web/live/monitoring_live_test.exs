@@ -438,7 +438,8 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       # new_suggestions is set to [] instead of filtering again
       # This test verifies the mode toggle works without crashing
       html = render(view)
-      assert html =~ "Search favourites"
+      # Verify we're in favourites mode (star icon button is present)
+      assert html =~ "hero-star"
     end
   end
 

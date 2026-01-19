@@ -25,11 +25,25 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/xprof_gui_liveview"
 import topbar from "../vendor/topbar"
 
+const Hooks = {}
+
+// Auto-hide flash messages after 5 seconds
+Hooks.AutoHideFlash = {
+  mounted() {
+    this.timer = setTimeout(() => {
+      this.el.click()
+    }, 5000)
+  },
+  destroyed() {
+    clearTimeout(this.timer)
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, ...Hooks},
 })
 
 // Show progress bar on live navigation and form submits
