@@ -740,6 +740,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     end
   end
 
+  def get_icon_path(mode) do
+    case mode do
+      "erlang" -> "/images/xprof_icon_erlang.png"
+      "elixir" -> "/images/xprof_icon_elixir.png"
+      _ -> "/images/xprof_icon.png"
+    end
+  end
+
   def format_mfa({mod, fun, arity}) when is_atom(mod) and is_atom(fun) and is_integer(arity) do
     "#{mod}:#{fun}/#{arity}"
   end

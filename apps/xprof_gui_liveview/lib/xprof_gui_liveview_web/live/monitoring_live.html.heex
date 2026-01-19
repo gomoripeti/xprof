@@ -3,10 +3,11 @@
   <nav class="navbar bg-base-100 shadow-lg fixed top-0 z-50">
     <div class="flex-1">
       <a href="/" class="btn btn-ghost normal-case text-xl">
-        <svg class="w-10 h-10 mr-2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="45" fill="#4f46e5"/>
-          <text x="50" y="65" font-size="50" font-weight="bold" fill="white" text-anchor="middle" font-family="monospace">X</text>
-        </svg>
+        <img
+          src={get_icon_path(@mode)}
+          alt="XProf"
+          class="w-10 h-10 mr-2"
+        />
         <span class="font-bold">XProf</span>
       </a>
     </div>
