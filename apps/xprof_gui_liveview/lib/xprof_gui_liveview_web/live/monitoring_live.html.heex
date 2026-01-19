@@ -12,7 +12,7 @@
       </a>
     </div>
 
-    <div class="flex-none gap-2">
+    <div class="flex-none flex items-center gap-4">
       <%!-- Trace Status Toggle --%>
       <button
         phx-click="toggle_trace"
@@ -43,19 +43,11 @@
 
       <%!-- Search Input --%>
       <div class="form-control relative">
-        <form phx-submit="submit_query" class="flex items-center gap-0">
-          <button
-            type="button"
-            class="btn btn-sm btn-ghost"
-            disabled
-          >
-            <.icon name="hero-magnifying-glass" class="w-5 h-5" />
-          </button>
-
+        <form phx-submit="submit_query">
           <input
             type="text"
             placeholder="Hello BEAMer! Search your favourites queries."
-            class="input input-bordered input-sm w-96 bg-base-100 text-base-content"
+            class="input input-sm w-[500px] bg-base-100 text-base-content border-base-300"
             value={@query}
             phx-change="update_query"
             phx-keydown="key_down"
@@ -67,7 +59,7 @@
 
         <%!-- Autocomplete Dropdown --%>
         <%= if length(@functions) > 0 do %>
-          <div class="absolute top-full mt-1 w-96 bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50 right-0">
+          <div class="absolute top-full mt-1 w-[500px] bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50">
             <ul class="menu menu-compact text-base-content">
               <%= for {func, index} <- Enum.with_index(@functions) do %>
                 <li>
