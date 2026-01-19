@@ -1,0 +1,207 @@
+<div class="min-h-screen bg-base-200">
+  <%!-- Navbar --%>
+  <nav class="navbar bg-base-100 shadow-lg fixed top-0 z-50">
+    <div class="flex-1">
+      <a href="/" class="btn btn-ghost normal-case text-xl">
+        <svg class="w-10 h-10 mr-2" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="45" fill="#4f46e5"/>
+          <text x="50" y="65" font-size="50" font-weight="bold" fill="white" text-anchor="middle" font-family="monospace">X</text>
+        </svg>
+        <span class="font-bold">XProf</span>
+      </a>
+    </div>
+
+    <div class="flex-none gap-2">
+      <%!-- Trace Status Toggle --%>
+      <button
+        phx-click="toggle_trace"
+        class={[
+          "btn btn-sm",
+          if(@trace_status == "running", do: "btn-success", else: "btn-warning")
+        ]}
+        title={if @trace_status == "running", do: "Pause tracing", else: "Start tracing"}
+      >
+        <%= if @trace_status == "running" do %>
+          <.icon name="hero-pause" class="w-4 h-4" />
+          <span class="ml-1">Tracing</span>
+        <% else %>
+          <.icon name="hero-play" class="w-4 h-4" />
+          <span class="ml-1">Paused</span>
+        <% end %>
+      </button>
+
+      <%!-- Grid Switch --%>
+      <div class="form-control">
+        <label class="label cursor-pointer gap-2">
+          <span class="label-text text-xs">Grid:</span>
+          <select
+            phx-change="switch_grid"
+            name="grid"
+            class="select select-bordered select-sm"
+            disabled={length(@monitored_functions) < 2}
+          >
+            <option value="1" selected={@grid == 1}>1</option>
+            <option value="2" selected={@grid == 2}>2</option>
+            <option value="3" selected={@grid == 3}>3</option>
+            <option value="4" selected={@grid == 4}>4</option>
+          </select>
+        </label>
+      </div>
+
+      <%!-- Function Browser / Query Input --%>
+      <div class="form-control relative">
+        <div class="input-group">
+          <%!-- Input Type Switch (Search / Favourites) --%>
+          <button
+            phx-click="toggle_input_type"
+            class="btn btn-sm"
+            title="Toggle between search and favourites (Ctrl+I)"
+          >
+            <%= if @input_type == :search do %>
+              <.icon name="hero-magnifying-glass" class="w-4 h-4" />
+            <% else %>
+              <.icon name="hero-star" class="w-4 h-4" />
+            <% end %>
+          </button>
+
+          <%!-- Query Input --%>
+          <input
+            type="text"
+            placeholder={get_placeholder(@input_type, @mode, @favourites)}
+            class="input input-bordered input-sm w-96"
+            value={@query}
+            phx-change="update_query"
+            phx-keydown="key_down"
+            phx-submit="submit_query"
+            name="query"
+            autocomplete="off"
+            id="query-input"
+          />
+
+          <button
+            type="submit"
+            phx-click="submit_query"
+            phx-value-query={@query}
+            class="btn btn-sm btn-primary"
+            disabled={String.length(@query) == 0}
+          >
+            Monitor
+          </button>
+        </div>
+
+        <%!-- Autocomplete Dropdown --%>
+        <%= if length(@functions) > 0 do %>
+          <div class="absolute top-full mt-1 w-96 bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50 left-12">
+            <ul class="menu menu-compact">
+              <%= for {func, index} <- Enum.with_index(@functions) do %>
+                <li>
+                  <a
+                    phx-click="select_function"
+                    phx-value-index={index}
+                    class={if @position == index, do: "active"}
+                  >
+                    <code class="text-xs"><%= func %></code>
+                  </a>
+                </li>
+              <% end %>
+            </ul>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </nav>
+
+  <%!-- Main Content Area (with padding for fixed navbar) --%>
+  <main class="pt-20 px-4 pb-8">
+    <%= if length(@monitored_functions) == 0 do %>
+      <%!-- Welcome / Empty State --%>
+      <div class="hero min-h-[60vh]">
+        <div class="hero-content text-center">
+          <div class="max-w-2xl">
+            <h1 class="text-5xl font-bold mb-4">Welcome to XProf</h1>
+            <p class="text-lg mb-8">
+              Start monitoring Erlang/Elixir functions in real-time.
+              Enter a function name in the search box above to begin.
+            </p>
+            <div class="alert alert-info">
+              <.icon name="hero-information-circle" class="w-6 h-6" />
+              <div class="text-left">
+                <h3 class="font-bold">Quick Start:</h3>
+                <ul class="list-disc list-inside mt-2">
+                  <li>Type a function name (e.g., <code>lists:map/2</code>)</li>
+                  <li>Use <kbd class="kbd kbd-sm">Ctrl</kbd> + <kbd class="kbd kbd-sm">I</kbd> to toggle between search and favourites</li>
+                  <li>Use <kbd class="kbd kbd-sm">↑</kbd> / <kbd class="kbd kbd-sm">↓</kbd> to navigate autocomplete</li>
+                  <li>Press <kbd class="kbd kbd-sm">Enter</kbd> to start monitoring</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% else %>
+      <%!-- Monitored Functions Grid --%>
+      <div class="grid gap-4" style={"grid-template-columns: repeat(#{@grid}, minmax(0, 1fr))"}>
+        <%= for monitored <- @monitored_functions do %>
+          <div class="card bg-base-100 shadow-xl">
+            <div class="card-body">
+              <h2 class="card-title text-sm font-mono">
+                <%= format_mfa(monitored.mfa) %>
+              </h2>
+              <div class="text-xs text-base-content/70">
+                <%= monitored.query %>
+              </div>
+              <%!-- Placeholder for graph/stats --%>
+              <div class="bg-base-200 rounded-lg h-64 flex items-center justify-center mt-4">
+                <span class="text-base-content/50">Graph placeholder</span>
+              </div>
+              <div class="card-actions justify-end mt-4">
+                <button class="btn btn-sm btn-ghost">
+                  <.icon name="hero-chart-bar" class="w-4 h-4" />
+                  Stats
+                </button>
+                <button class="btn btn-sm btn-ghost">
+                  <.icon name="hero-document-text" class="w-4 h-4" />
+                  Capture
+                </button>
+                <button class="btn btn-sm btn-error btn-outline">
+                  <.icon name="hero-x-mark" class="w-4 h-4" />
+                  Stop
+                </button>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </main>
+
+  <%!-- Footer --%>
+  <footer class="footer footer-center p-4 bg-base-300 text-base-content">
+    <div>
+      <p class="text-sm">
+        XProf <%= if @mode, do: "- Mode: #{@mode}", else: "" %>
+        | Status: <span class={[
+          "font-semibold",
+          if(@trace_status == "running", do: "text-success", else: "text-warning")
+        ]}><%= @trace_status %></span>
+      </p>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // Handle keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Ctrl+I to toggle input type
+    if (e.ctrlKey && e.key === 'i') {
+      e.preventDefault();
+      document.dispatchEvent(new CustomEvent('phx:toggle_input_type'));
+    }
+  });
+
+  // Auto-focus query input on page load
+  window.addEventListener('phx:page-loading-stop', () => {
+    const input = document.getElementById('query-input');
+    if (input) input.focus();
+  });
+</script>

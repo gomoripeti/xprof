@@ -17,7 +17,7 @@ defmodule XprofGuiLiveviewWeb.Router do
   scope "/", XprofGuiLiveviewWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", MonitoringLive, :index
   end
 
   # Other scopes may use custom stacks.
