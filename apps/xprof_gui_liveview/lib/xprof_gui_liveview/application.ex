@@ -11,8 +11,8 @@ defmodule XprofGuiLiveview.Application do
       XprofGuiLiveviewWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:xprof_gui_liveview, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: XprofGuiLiveview.PubSub},
-      # Start a worker by calling: XprofGuiLiveview.Worker.start_link(arg)
-      # {XprofGuiLiveview.Worker, arg},
+      # Favourites store for persisting favourite queries
+      XprofGuiLiveview.FavouritesStore,
       # Start to serve requests, typically the last entry
       XprofGuiLiveviewWeb.Endpoint
     ]

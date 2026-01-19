@@ -125,23 +125,36 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   @impl true
   def handle_event("add_to_favourites", %{"query" => query}, socket) do
     # Add query to favourites
-    :ok = add_favourite(query)
-    favourites = fetch_favourites()
-    {:noreply,
-     socket
-     |> assign(favourites: favourites)
-     |> put_flash(:info, "Added to favourites")}
+    case add_favourite(query) do
+      :ok ->
+        favourites = fetch_favourites()
+        {:noreply,
+         socket
+         |> assign(favourites: favourites)
+         |> put_flash(:info, "Added to favourites")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to add favourite: #{inspect(reason)}")}
+    end
   end
 
   @impl true
   def handle_event("remove_from_favourites", %{"query" => query}, socket) do
     # Remove query from favourites
-    :ok = remove_favourite(query)
-    favourites = fetch_favourites()
-    {:noreply,
-     socket
-     |> assign(favourites: favourites)
-     |> put_flash(:info, "Removed from favourites")}
+    case remove_favourite(query) do
+      :ok ->
+        favourites = fetch_favourites()
+        {:noreply,
+         socket
+         |> assign(favourites: favourites)
+         |> put_flash(:info, "Removed from favourites")}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :info, "Favourite not found")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to remove favourite: #{inspect(reason)}")}
+    end
   end
 
   @impl true
@@ -376,9 +389,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   defp format_stats_snapshot(_), do: nil
 
   defp fetch_favourites do
-    # TODO: Get favourites list from xprof_gui_favourites
-    # For now, return empty list since we don't have xprof_gui as dependency
-    []
+    # Get favourites from ETS-based store
+    try do
+      XprofGuiLiveview.FavouritesStore.list()
+    rescue
+      e ->
+        Logger.error("Failed to fetch favourites: #{inspect(e)}")
+        []
+    end
   end
 
   defp fetch_autocomplete_functions(query) do
@@ -432,16 +450,26 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     end
   end
 
-  defp add_favourite(_query) do
-    # TODO: Implement favourites persistence
-    # For now, just return ok
-    :ok
+  defp add_favourite(query) when is_binary(query) do
+    # Add to persistent favourites store
+    try do
+      XprofGuiLiveview.FavouritesStore.add(query)
+    rescue
+      e ->
+        Logger.error("Failed to add favourite '#{query}': #{inspect(e)}")
+        {:error, e}
+    end
   end
 
-  defp remove_favourite(_query) do
-    # TODO: Implement favourites removal
-    # For now, just return ok
-    :ok
+  defp remove_favourite(query) when is_binary(query) do
+    # Remove from persistent favourites store
+    try do
+      XprofGuiLiveview.FavouritesStore.remove(query)
+    rescue
+      e ->
+        Logger.error("Failed to remove favourite '#{query}': #{inspect(e)}")
+        {:error, e}
+    end
   end
 
   defp toggle_trace_status(spec) do

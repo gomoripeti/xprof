@@ -107,14 +107,18 @@ This Phoenix/Mix app lives inside a rebar3 umbrella project. Key integration poi
   - View captured calls with arguments, results, and execution time
   - Displays exceptions with warnings
   - Incremental data fetching support
+- **Favourites**: Persistent storage of favourite queries
+  - Add/remove queries to favourites
+  - ETS-based in-memory persistence (survives across LiveView sessions)
+  - Filter favourites with search
 - **Trace Control**: Global trace pause/resume
 - **Grid Layout**: 1-4 column grid for multiple monitored functions
 - **Input Modes**: Toggle between search and favourites (Ctrl+I)
 
 ### 🚧 In Progress
-- Favourites persistence
 - Additional keyboard shortcuts
 - Query validation
+- Performance optimization
 
 ## Roadmap
 
