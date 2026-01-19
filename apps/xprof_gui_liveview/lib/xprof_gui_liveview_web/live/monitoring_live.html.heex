@@ -1,6 +1,6 @@
 <div class="min-h-screen bg-base-200">
   <%!-- Navbar --%>
-  <nav class="navbar bg-base-100 shadow-lg fixed top-0 z-50">
+  <nav class="navbar bg-neutral text-neutral-content shadow-lg fixed top-0 z-50">
     <div class="flex-1">
       <a href="/" class="btn btn-ghost normal-case text-xl">
         <img
@@ -8,7 +8,7 @@
           alt="XProf"
           class="w-10 h-10 mr-2"
         />
-        <span class="font-bold">XProf</span>
+        <span class="font-bold text-white">XPROF</span>
       </a>
     </div>
 
@@ -17,60 +17,45 @@
       <button
         phx-click="toggle_trace"
         class={[
-          "btn btn-sm",
-          if(@trace_status == "running", do: "btn-success", else: "btn-warning")
+          "btn btn-sm gap-2",
+          if(@trace_status == "running", do: "btn-error", else: "btn-error")
         ]}
         title={if @trace_status == "running", do: "Pause tracing", else: "Start tracing"}
       >
         <%= if @trace_status == "running" do %>
-          <.icon name="hero-pause" class="w-4 h-4" />
-          <span class="ml-1">Tracing</span>
+          <.icon name="hero-pause-solid" class="w-4 h-4" />
+          <span>Pause Tracing</span>
         <% else %>
-          <.icon name="hero-play" class="w-4 h-4" />
-          <span class="ml-1">Paused</span>
+          <.icon name="hero-pause-solid" class="w-4 h-4" />
+          <span>Pause Tracing</span>
         <% end %>
       </button>
 
-      <%!-- Grid Switch --%>
-      <div class="form-control">
-        <label class="label cursor-pointer gap-2">
-          <span class="label-text text-xs">Grid:</span>
-          <select
-            phx-change="switch_grid"
-            name="grid"
-            class="select select-bordered select-sm"
-            disabled={length(@monitored_functions) < 2}
-          >
-            <option value="1" selected={@grid == 1}>1</option>
-            <option value="2" selected={@grid == 2}>2</option>
-            <option value="3" selected={@grid == 3}>3</option>
-            <option value="4" selected={@grid == 4}>4</option>
-          </select>
-        </label>
-      </div>
+      <%!-- Favourites Toggle --%>
+      <button
+        type="button"
+        phx-click="toggle_input_type"
+        class="btn btn-sm btn-ghost"
+        title="Toggle favourites (Ctrl+I)"
+      >
+        <.icon name="hero-star" class="w-5 h-5" />
+      </button>
 
-      <%!-- Function Browser / Query Input --%>
+      <%!-- Search Input --%>
       <div class="form-control relative">
-        <form phx-submit="submit_query" class="input-group">
-          <%!-- Input Type Switch (Search / Favourites) --%>
+        <form phx-submit="submit_query" class="flex items-center gap-0">
           <button
             type="button"
-            phx-click="toggle_input_type"
-            class="btn btn-sm"
-            title="Toggle between search and favourites (Ctrl+I)"
+            class="btn btn-sm btn-ghost"
+            disabled
           >
-            <%= if @input_type == :search do %>
-              <.icon name="hero-magnifying-glass" class="w-4 h-4" />
-            <% else %>
-              <.icon name="hero-star" class="w-4 h-4" />
-            <% end %>
+            <.icon name="hero-magnifying-glass" class="w-5 h-5" />
           </button>
 
-          <%!-- Query Input --%>
           <input
             type="text"
-            placeholder={get_placeholder(@input_type, @mode, @favourites)}
-            class="input input-bordered input-sm w-96"
+            placeholder="Hello BEAMer! Search your favourites queries."
+            class="input input-bordered input-sm w-96 bg-base-100 text-base-content"
             value={@query}
             phx-change="update_query"
             phx-keydown="key_down"
@@ -78,20 +63,12 @@
             autocomplete="off"
             id="query-input"
           />
-
-          <button
-            type="submit"
-            class="btn btn-sm btn-primary"
-            disabled={String.length(@query) == 0}
-          >
-            Monitor
-          </button>
         </form>
 
         <%!-- Autocomplete Dropdown --%>
         <%= if length(@functions) > 0 do %>
-          <div class="absolute top-full mt-1 w-96 bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50 left-12">
-            <ul class="menu menu-compact">
+          <div class="absolute top-full mt-1 w-96 bg-base-100 shadow-lg rounded-lg max-h-64 overflow-y-auto z-50 right-0">
+            <ul class="menu menu-compact text-base-content">
               <%= for {func, index} <- Enum.with_index(@functions) do %>
                 <li>
                   <a
@@ -106,6 +83,22 @@
             </ul>
           </div>
         <% end %>
+      </div>
+
+      <%!-- Grid Selector --%>
+      <div class="dropdown dropdown-end">
+        <label tabindex="0" class="btn btn-sm btn-ghost">
+          <.icon name="hero-squares-2x2" class="w-5 h-5" />
+        </label>
+        <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32 text-base-content">
+          <%= for grid_size <- [1, 2, 3, 4] do %>
+            <li>
+              <a phx-click="switch_grid" phx-value-grid={grid_size} class={if @grid == grid_size, do: "active"}>
+                <%= grid_size %> column<%= if grid_size > 1, do: "s" %>
+              </a>
+            </li>
+          <% end %>
+        </ul>
       </div>
     </div>
   </nav>
@@ -284,30 +277,61 @@
 
               <%!-- Captured Data Display --%>
               <%= if @capture_data[monitored.mfa_str] do %>
-                <div class="mt-4">
-                  <div class="divider divider-start text-xs">Captured Calls</div>
+                <div class="mt-4 border-t pt-4">
+                  <h3 class="text-sm font-semibold mb-3"><%= monitored.mfa_str %> - Slow calls tracing</h3>
                   <% capture = @capture_data[monitored.mfa_str] %>
-                  <div class="text-xs mb-2 opacity-70">
-                    Capture ID: <%= capture.spec.capture_id %> |
-                    Threshold: <%= capture.spec.threshold %>ms |
-                    Limit: <%= capture.spec.limit %> |
-                    <%= if capture.spec.has_more, do: "Capturing...", else: "Complete" %>
+
+                  <%!-- Capture Controls --%>
+                  <div class="flex items-center gap-4 mb-4">
+                    <div class="flex items-center gap-2">
+                      <label class="text-sm font-medium">Threshold</label>
+                      <input
+                        type="number"
+                        value={capture.spec.threshold}
+                        class="input input-sm input-bordered w-20"
+                        disabled
+                      />
+                      <span class="text-sm">ms</span>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                      <label class="text-sm font-medium">Limit</label>
+                      <input
+                        type="number"
+                        value={capture.spec.limit}
+                        class="input input-sm input-bordered w-20"
+                        disabled
+                      />
+                      <span class="text-sm">calls</span>
+                    </div>
+
+                    <button
+                      phx-click="stop_capture"
+                      phx-value-mfa={monitored.mfa_str}
+                      class="btn btn-sm btn-error"
+                    >
+                      Stop
+                    </button>
                   </div>
-                  <div class="overflow-x-auto max-h-96">
-                    <table class="table table-xs table-zebra">
+
+                  <%!-- Captured Calls Table --%>
+                  <div class="overflow-x-auto">
+                    <table class="table table-xs">
                       <thead>
                         <tr>
-                          <th>#</th>
-                          <th>Time (ms)</th>
-                          <th>Args</th>
-                          <th>Result</th>
+                          <th>No.</th>
+                          <th>Call time</th>
+                          <th>Pid</th>
+                          <th>Function arguments</th>
+                          <th>Return value</th>
                         </tr>
                       </thead>
                       <tbody>
                         <%= for item <- capture.items do %>
                           <tr>
-                            <td class="font-mono"><%= item.id %></td>
-                            <td class="font-mono"><%= item.call_time %></td>
+                            <td><%= item.id %></td>
+                            <td><%= item.call_time %> µs</td>
+                            <td class="font-mono text-xs"><%= item.pid %></td>
                             <td class="font-mono text-xs"><%= item.args %></td>
                             <td class="font-mono text-xs"><%= item.res %></td>
                           </tr>
@@ -315,7 +339,7 @@
                       </tbody>
                     </table>
                     <%= if length(capture.items) == 0 do %>
-                      <div class="text-center py-4 text-sm opacity-50">
+                      <div class="text-center py-8 text-sm opacity-50">
                         No calls captured yet
                       </div>
                     <% end %>

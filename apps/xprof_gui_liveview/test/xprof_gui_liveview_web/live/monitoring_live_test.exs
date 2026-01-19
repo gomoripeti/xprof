@@ -12,15 +12,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
 
       # Check query input exists
       assert has_element?(view, "input[name='query']")
-      assert has_element?(view, "button", "Monitor")
     end
 
     test "displays initial state correctly", %{conn: conn} do
       {:ok, _view, html} = live(conn, "/")
 
       # Check navbar elements
-      assert html =~ "XProf"
-      assert html =~ "Paused"  # Initial trace status
+      assert html =~ "XPROF"
+      assert html =~ "Pause Tracing"  # Initial trace status
 
       # Check footer
       assert html =~ "Status:"
@@ -42,8 +41,8 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
     test "trace toggle button changes state", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
 
-      # Initially paused
-      assert has_element?(view, "button", "Paused")
+      # Initially shows "Pause Tracing"
+      assert has_element?(view, "button", "Pause Tracing")
 
       # Click toggle button
       view
@@ -54,13 +53,11 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       # Note: This would need proper mocking of xprof_core in real tests
     end
 
-    test "grid selector is disabled when no functions monitored", %{conn: conn} do
+    test "grid selector exists in navbar", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
 
-      # Grid selector should be disabled initially
-      assert view
-             |> element("select[name='grid']")
-             |> render() =~ "disabled"
+      # Grid selector dropdown should exist
+      assert has_element?(view, ".dropdown")
     end
 
     test "input type toggle switches between search and favourites", %{conn: conn} do
@@ -78,13 +75,11 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       # The input_type assign should change
     end
 
-    test "submit button is disabled when query is empty", %{conn: conn} do
+    test "query input exists in navbar", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
 
-      # Monitor button should be disabled initially
-      assert view
-             |> element("button[type='submit']", "Monitor")
-             |> render() =~ "disabled"
+      # Query input should exist
+      assert has_element?(view, "input[name='query']")
     end
 
     test "autocomplete appears when typing query", %{conn: conn} do
