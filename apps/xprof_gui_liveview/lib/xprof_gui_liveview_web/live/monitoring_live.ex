@@ -261,8 +261,12 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         val when is_binary(val) -> val
         _ -> to_string(function)
       end
-      # Append the selected value to the existing query
-      updated_query = socket.assigns.query <> new_value
+
+      # In favourites mode, replace query; in search mode, append
+      updated_query = case socket.assigns.input_type do
+        :favourites -> new_value
+        :search -> socket.assigns.query <> new_value
+      end
 
       # Regenerate autocomplete suggestions based on the updated query
       new_suggestions = case socket.assigns.input_type do
@@ -273,11 +277,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
             []
           end
         :favourites ->
-          if String.length(updated_query) >= 2 do
-            filter_favourites(socket.assigns.favourites, updated_query)
-          else
-            favourites_as_suggestions(socket.assigns.favourites)
-          end
+          []  # Clear suggestions after selecting a favourite
       end
 
       {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
@@ -692,8 +692,12 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         val when is_binary(val) -> val
         _ -> to_string(function)
       end
-      # Append the selected value to the existing query
-      updated_query = socket.assigns.query <> new_value
+
+      # In favourites mode, replace query; in search mode, append
+      updated_query = case socket.assigns.input_type do
+        :favourites -> new_value
+        :search -> socket.assigns.query <> new_value
+      end
 
       # Regenerate autocomplete suggestions based on the updated query
       new_suggestions = case socket.assigns.input_type do
@@ -704,11 +708,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
             []
           end
         :favourites ->
-          if String.length(updated_query) >= 2 do
-            filter_favourites(socket.assigns.favourites, updated_query)
-          else
-            favourites_as_suggestions(socket.assigns.favourites)
-          end
+          []  # Clear suggestions after selecting a favourite
       end
 
       {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
