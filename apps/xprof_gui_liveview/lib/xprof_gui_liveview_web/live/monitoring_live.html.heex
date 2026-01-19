@@ -305,10 +305,10 @@
                       <tbody>
                         <%= for item <- capture.items do %>
                           <tr>
-                            <td class="font-mono"><%= item.index %></td>
-                            <td class="font-mono"><%= item.call_time_ms %></td>
+                            <td class="font-mono"><%= item.id %></td>
+                            <td class="font-mono"><%= item.call_time %></td>
                             <td class="font-mono text-xs"><%= item.args %></td>
-                            <td class="font-mono text-xs"><%= item.result %></td>
+                            <td class="font-mono text-xs"><%= item.res %></td>
                           </tr>
                         <% end %>
                       </tbody>

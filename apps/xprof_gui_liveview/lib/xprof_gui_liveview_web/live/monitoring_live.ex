@@ -8,6 +8,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       # Start periodic updates when LiveView connects
       :timer.send_interval(1000, self(), :update_status)
       :timer.send_interval(2000, self(), :update_functions)
+      :timer.send_interval(1000, self(), :update_captures)
       :timer.send_interval(30000, self(), :update_favourites)
     end
 
@@ -315,6 +316,26 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     {:noreply, assign(socket, favourites: favourites)}
   end
 
+  @impl true
+  def handle_info(:update_captures, socket) do
+    # Update all active captures with fresh data
+    updated_capture_data =
+      socket.assigns.capture_data
+      |> Enum.map(fn {mfa_str, _current_data} ->
+        mfa = parse_mfa(mfa_str)
+        case fetch_captured_data(mfa, 0) do
+          {:ok, spec, items} ->
+            {mfa_str, %{spec: spec, items: items}}
+          {:error, _reason} ->
+            # Keep existing data if fetch fails
+            {mfa_str, socket.assigns.capture_data[mfa_str]}
+        end
+      end)
+      |> Map.new()
+
+    {:noreply, assign(socket, capture_data: updated_capture_data)}
+  end
+
   # Private functions for API calls to xprof_core
 
   defp fetch_initial_data(socket) do
@@ -525,11 +546,12 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   defp fetch_captured_data(mfa, offset) when is_tuple(mfa) do
-    # Fetch captured call data
+    # Fetch captured call data using get_captured_data_pp
+    # xprof_core handles formatting
     # Returns: {:ok, {CaptureId, Threshold, Limit, HasMore}, Items} or {:error, Reason}
-    # Items: [{Index, Pid, CallTimeMs, Args, Result}, ...]
+    # Items: [[{id, Index}, {pid, FormattedPid}, {call_time, Ms}, {args, FormattedArgs}, {res, FormattedRes}], ...]
     try do
-      case :xprof_core.get_captured_data(mfa, offset) do
+      case :xprof_core.get_captured_data_pp(mfa, offset) do
         {:ok, {capture_id, threshold, limit, has_more}, items} ->
           spec = %{
             capture_id: capture_id,
@@ -538,14 +560,15 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
             has_more: has_more
           }
 
+          # Convert proplists to maps
           formatted_items =
-            Enum.map(items, fn {index, pid, call_time_ms, args, result} ->
+            Enum.map(items, fn proplist ->
               %{
-                index: index,
-                pid: inspect(pid),
-                call_time_ms: call_time_ms,
-                args: inspect(args, limit: 50, pretty: true),
-                result: format_result(result)
+                id: :proplists.get_value(:id, proplist),
+                pid: to_string(:proplists.get_value(:pid, proplist)),
+                call_time: :proplists.get_value(:call_time, proplist),
+                args: to_string(:proplists.get_value(:args, proplist)),
+                res: to_string(:proplists.get_value(:res, proplist))
               }
             end)
 
@@ -559,18 +582,6 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         Logger.error("Failed to fetch captured data for #{inspect(mfa)}: #{inspect(e)}")
         {:error, e}
     end
-  end
-
-  defp format_result({:return_from, term}) do
-    "=> #{inspect(term, limit: 50, pretty: true)}"
-  end
-
-  defp format_result({:exception_from, {class, reason}}) do
-    "⚠ #{class}: #{inspect(reason, limit: 50, pretty: true)}"
-  end
-
-  defp format_result(other) do
-    inspect(other, limit: 50, pretty: true)
   end
 
   defp validate_query(query) when is_binary(query) do
