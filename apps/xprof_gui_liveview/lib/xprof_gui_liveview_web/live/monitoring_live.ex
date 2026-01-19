@@ -600,13 +600,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     %{
       mfa: mfa,
       query: to_string(query),
-      mfa_str: serialize_mfa(mfa)
+      mfa_str: serialize_mfa(mfa),
+      stats: nil  # Initialize to nil - will be populated by :update_functions timer
     }
   end
 
   defp format_monitored_function(_) do
     # Fallback for unexpected format
-    %{mfa: nil, query: "", mfa_str: ""}
+    %{mfa: nil, query: "", mfa_str: "", stats: nil}
   end
 
   defp handle_key_event("ArrowUp", socket) do
