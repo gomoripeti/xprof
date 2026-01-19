@@ -50,9 +50,10 @@
 
       <%!-- Function Browser / Query Input --%>
       <div class="form-control relative">
-        <div class="input-group">
+        <form phx-submit="submit_query" class="input-group">
           <%!-- Input Type Switch (Search / Favourites) --%>
           <button
+            type="button"
             phx-click="toggle_input_type"
             class="btn btn-sm"
             title="Toggle between search and favourites (Ctrl+I)"
@@ -72,7 +73,6 @@
             value={@query}
             phx-change="update_query"
             phx-keydown="key_down"
-            phx-submit="submit_query"
             name="query"
             autocomplete="off"
             id="query-input"
@@ -80,14 +80,12 @@
 
           <button
             type="submit"
-            phx-click="submit_query"
-            phx-value-query={@query}
             class="btn btn-sm btn-primary"
             disabled={String.length(@query) == 0}
           >
             Monitor
           </button>
-        </div>
+        </form>
 
         <%!-- Autocomplete Dropdown --%>
         <%= if length(@functions) > 0 do %>
@@ -100,7 +98,7 @@
                     phx-value-index={index}
                     class={if @position == index, do: "active"}
                   >
-                    <code class="text-xs"><%= func %></code>
+                    <code class="text-xs"><%= func.label || func.value || func %></code>
                   </a>
                 </li>
               <% end %>
@@ -113,6 +111,10 @@
 
   <%!-- Main Content Area (with padding for fixed navbar) --%>
   <main class="pt-20 px-4 pb-8">
+    <%!-- Flash Messages --%>
+    <.flash kind={:info} flash={@flash} />
+    <.flash kind={:error} flash={@flash} />
+
     <%= if length(@monitored_functions) == 0 do %>
       <%!-- Welcome / Empty State --%>
       <div class="hero min-h-[60vh]">
@@ -154,19 +156,34 @@
               <div class="bg-base-200 rounded-lg h-64 flex items-center justify-center mt-4">
                 <span class="text-base-content/50">Graph placeholder</span>
               </div>
-              <div class="card-actions justify-end mt-4">
-                <button class="btn btn-sm btn-ghost">
-                  <.icon name="hero-chart-bar" class="w-4 h-4" />
-                  Stats
+              <div class="card-actions justify-between mt-4">
+                <button
+                  phx-click="add_to_favourites"
+                  phx-value-query={monitored.query}
+                  class="btn btn-sm btn-ghost"
+                  title="Add to favourites"
+                >
+                  <.icon name="hero-star" class="w-4 h-4" />
                 </button>
-                <button class="btn btn-sm btn-ghost">
-                  <.icon name="hero-document-text" class="w-4 h-4" />
-                  Capture
-                </button>
-                <button class="btn btn-sm btn-error btn-outline">
-                  <.icon name="hero-x-mark" class="w-4 h-4" />
-                  Stop
-                </button>
+                <div class="flex gap-2">
+                  <button class="btn btn-sm btn-ghost" title="View statistics">
+                    <.icon name="hero-chart-bar" class="w-4 h-4" />
+                    Stats
+                  </button>
+                  <button class="btn btn-sm btn-ghost" title="Capture calls">
+                    <.icon name="hero-document-text" class="w-4 h-4" />
+                    Capture
+                  </button>
+                  <button
+                    phx-click="demonitor"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-sm btn-error btn-outline"
+                    title="Stop monitoring"
+                  >
+                    <.icon name="hero-x-mark" class="w-4 h-4" />
+                    Stop
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -195,7 +212,11 @@
     // Ctrl+I to toggle input type
     if (e.ctrlKey && e.key === 'i') {
       e.preventDefault();
-      document.dispatchEvent(new CustomEvent('phx:toggle_input_type'));
+      // Find the toggle button and trigger a click
+      const toggleBtn = document.querySelector('[phx-click="toggle_input_type"]');
+      if (toggleBtn) {
+        toggleBtn.click();
+      }
     }
   });
 

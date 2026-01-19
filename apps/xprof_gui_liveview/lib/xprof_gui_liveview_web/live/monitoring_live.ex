@@ -1,12 +1,13 @@
 defmodule XprofGuiLiveviewWeb.MonitoringLive do
   use XprofGuiLiveviewWeb, :live_view
+  require Logger
 
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket) do
       # Start periodic updates when LiveView connects
       :timer.send_interval(1000, self(), :update_status)
-      :timer.send_interval(5000, self(), :update_functions)
+      :timer.send_interval(2000, self(), :update_functions)
       :timer.send_interval(30000, self(), :update_favourites)
     end
 
@@ -16,37 +17,130 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
      |> assign(:functions, [])
      |> assign(:monitored_functions, [])
      |> assign(:position, -1)
+     |> assign(:history_position, -1)
      |> assign(:input_type, :search)
      |> assign(:trace_status, "paused")
      |> assign(:mode, nil)
      |> assign(:grid, 1)
      |> assign(:favourites, [])
+     |> assign(:recent_queries, [])
      |> fetch_initial_data()}
   end
 
   @impl true
   def handle_event("update_query", %{"query" => query}, socket) do
     # Handle query input changes
-    functions = if String.length(query) >= 2 do
-      fetch_autocomplete_functions(query)
-    else
-      []
+    suggestions = case socket.assigns.input_type do
+      :search ->
+        # Use xprof_core autocomplete for search mode
+        if String.length(query) >= 2 do
+          fetch_autocomplete_functions(query)
+        else
+          []
+        end
+
+      :favourites ->
+        # Filter favourites based on query
+        if String.length(query) >= 2 do
+          filter_favourites(socket.assigns.favourites, query)
+        else
+          socket.assigns.favourites
+        end
     end
 
-    {:noreply, assign(socket, query: query, functions: functions, position: -1)}
+    # Don't show autocomplete if there's only one match that equals the current query
+    # (i.e., append value would be empty, so dropdown would be useless)
+    filtered_suggestions = case suggestions do
+      [single_match] ->
+        match_value = case single_match do
+          %{value: val} -> val
+          val when is_binary(val) -> val
+          _ -> to_string(single_match)
+        end
+        # If the only match equals current query, hide dropdown
+        if match_value == query, do: [], else: suggestions
+
+      _ ->
+        suggestions
+    end
+
+    # Reset history position when user types (they're editing, not navigating history)
+    {:noreply, assign(socket, query: query, functions: filtered_suggestions, position: -1, history_position: -1)}
   end
 
   @impl true
   def handle_event("submit_query", %{"query" => query}, socket) do
+    # Add to recent queries history (only on submit, not on every keystroke)
+    recent_queries = socket.assigns.recent_queries || []
+    last_query = if recent_queries == [], do: nil, else: hd(recent_queries)
+
+    updated_recent = if String.length(query) > 0 and query != last_query do
+      [query | Enum.take(recent_queries, 19)]  # Keep last 20
+    else
+      recent_queries
+    end
+
     # Start monitoring the function
     case monitor_function(query) do
-      {:ok, _} ->
+      :ok ->
         monitored = fetch_monitored_functions()
-        {:noreply, assign(socket, query: "", functions: [], monitored_functions: monitored)}
+        {:noreply,
+         socket
+         |> assign(query: "", functions: [], monitored_functions: monitored, recent_queries: updated_recent, history_position: -1)
+         |> put_flash(:info, "Started monitoring: #{query}")}
+
+      {:error, :already_traced} ->
+        {:noreply,
+         socket
+         |> assign(recent_queries: updated_recent)
+         |> put_flash(:info, "Function is already being monitored")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to monitor: #{inspect(reason)}")}
+        {:noreply,
+         socket
+         |> assign(recent_queries: updated_recent)
+         |> put_flash(:error, "Failed to monitor: #{inspect(reason)}")}
     end
+  end
+
+  @impl true
+  def handle_event("demonitor", %{"mfa" => mfa_str}, socket) do
+    # Stop monitoring the function
+    mfa = parse_mfa(mfa_str)
+
+    case demonitor_function(mfa) do
+      :ok ->
+        monitored = fetch_monitored_functions()
+        {:noreply,
+         socket
+         |> assign(monitored_functions: monitored)
+         |> put_flash(:info, "Stopped monitoring: #{format_mfa(mfa)}")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to stop monitoring: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("add_to_favourites", %{"query" => query}, socket) do
+    # Add query to favourites
+    :ok = add_favourite(query)
+    favourites = fetch_favourites()
+    {:noreply,
+     socket
+     |> assign(favourites: favourites)
+     |> put_flash(:info, "Added to favourites")}
+  end
+
+  @impl true
+  def handle_event("remove_from_favourites", %{"query" => query}, socket) do
+    # Remove query from favourites
+    :ok = remove_favourite(query)
+    favourites = fetch_favourites()
+    {:noreply,
+     socket
+     |> assign(favourites: favourites)
+     |> put_flash(:info, "Removed from favourites")}
   end
 
   @impl true
@@ -82,7 +176,32 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
 
     if index >= 0 and index < length(functions) do
       function = Enum.at(functions, index)
-      {:noreply, assign(socket, query: function, position: index)}
+      # Extract the value from the function map (or use the string directly if it's not a map)
+      new_value = case function do
+        %{value: val} -> val
+        val when is_binary(val) -> val
+        _ -> to_string(function)
+      end
+      # Append the selected value to the existing query
+      updated_query = socket.assigns.query <> new_value
+
+      # Regenerate autocomplete suggestions based on the updated query
+      new_suggestions = case socket.assigns.input_type do
+        :search ->
+          if String.length(updated_query) >= 2 do
+            fetch_autocomplete_functions(updated_query)
+          else
+            []
+          end
+        :favourites ->
+          if String.length(updated_query) >= 2 do
+            filter_favourites(socket.assigns.favourites, updated_query)
+          else
+            socket.assigns.favourites
+          end
+      end
+
+      {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
     else
       {:noreply, socket}
     end
@@ -129,7 +248,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         _ -> "unknown"
       end
     rescue
-      _ -> "unknown"
+      e ->
+        Logger.error("Failed to fetch mode: #{inspect(e)}")
+        "unknown"
     end
   end
 
@@ -142,7 +263,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         _ -> "paused"
       end
     rescue
-      _ -> "paused"
+      e ->
+        Logger.error("Failed to fetch trace status: #{inspect(e)}")
+        "paused"
     end
   end
 
@@ -152,7 +275,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       monitored = :xprof_core.get_all_monitored()
       Enum.map(monitored, &format_monitored_function/1)
     rescue
-      _ -> []
+      e ->
+        Logger.error("Failed to fetch monitored functions: #{inspect(e)}")
+        []
     end
   end
 
@@ -162,19 +287,67 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     []
   end
 
-  defp fetch_autocomplete_functions(_query) do
-    # TODO: Implement autocomplete using xprof_core API
-    # For now return empty list
-    []
+  defp fetch_autocomplete_functions(query) do
+    # Use xprof_core expand_query for autocomplete
+    try do
+      case :xprof_core.expand_query(query) do
+        {_prefix, matches} ->
+          Enum.map(matches, fn
+            {expand, label} -> %{value: to_string(expand), label: to_string(label)}
+            expand when is_binary(expand) -> %{value: to_string(expand), label: to_string(expand)}
+          end)
+
+        _ -> []
+      end
+    rescue
+      e ->
+        Logger.error("Failed to fetch autocomplete functions for query '#{query}': #{inspect(e)}")
+        []
+    end
+  end
+
+  defp filter_favourites(favourites, query) do
+    # Filter favourites list by query string
+    query_lower = String.downcase(query)
+    favourites
+    |> Enum.filter(fn fav ->
+      String.contains?(String.downcase(to_string(fav)), query_lower)
+    end)
+    |> Enum.map(fn fav -> %{value: to_string(fav), label: to_string(fav)} end)
   end
 
   defp monitor_function(query) do
-    # Start monitoring a function
+    # Start monitoring a function using the query string
     try do
-      :xprof_core.monitor(String.to_charlist(query))
+      :xprof_core.monitor_pp(String.to_charlist(query))
     rescue
-      e -> {:error, e}
+      e ->
+        Logger.error("Failed to monitor function '#{query}': #{inspect(e)}")
+        {:error, e}
     end
+  end
+
+  defp demonitor_function(mfa) when is_tuple(mfa) do
+    # Stop monitoring a function
+    try do
+      :xprof_core.demonitor(mfa)
+    rescue
+      e ->
+        Logger.error("Failed to demonitor function #{inspect(mfa)}: #{inspect(e)}")
+        {:error, e}
+    end
+  end
+
+  defp add_favourite(_query) do
+    # TODO: Implement favourites persistence
+    # For now, just return ok
+    :ok
+  end
+
+  defp remove_favourite(_query) do
+    # TODO: Implement favourites removal
+    # For now, just return ok
+    :ok
   end
 
   defp toggle_trace_status(spec) do
@@ -185,42 +358,114 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         :pause -> "paused"
       end
     rescue
-      _ -> "paused"
+      e ->
+        Logger.error("Failed to toggle trace status to #{inspect(spec)}: #{inspect(e)}")
+        "paused"
     end
   end
 
-  defp format_monitored_function(fun_data) do
+  defp format_monitored_function({mfa, query}) when is_tuple(mfa) do
     # Format the monitored function data for display
-    # fun_data is from xprof_core, convert to map
+    # xprof_core.get_all_monitored() returns list of {MFA, Query} tuples
     %{
-      mfa: fun_data[:mfa] || [],
-      query: fun_data[:query] || "",
-      graph_type: fun_data[:graph_type] || "default"
+      mfa: mfa,
+      query: to_string(query),
+      mfa_str: serialize_mfa(mfa)
     }
   end
 
+  defp format_monitored_function(_) do
+    # Fallback for unexpected format
+    %{mfa: nil, query: "", mfa_str: ""}
+  end
+
   defp handle_key_event("ArrowUp", socket) do
-    # Move up in autocomplete list
-    new_position = max(socket.assigns.position - 1, -1)
-    {:noreply, assign(socket, position: new_position)}
+    # If there are autocomplete suggestions, navigate through them
+    if length(socket.assigns.functions) > 0 do
+      new_position = max(socket.assigns.position - 1, -1)
+      {:noreply, assign(socket, position: new_position)}
+    else
+      # Navigate through recent queries (like command history)
+      recent_queries = socket.assigns.recent_queries
+
+      if length(recent_queries) > 0 do
+        current_pos = socket.assigns.history_position
+        new_pos = min(current_pos + 1, length(recent_queries) - 1)
+
+        # Update query with the selected history item
+        query = if new_pos >= 0 and new_pos < length(recent_queries) do
+          Enum.at(recent_queries, new_pos)
+        else
+          ""
+        end
+
+        {:noreply, assign(socket, query: query, history_position: new_pos)}
+      else
+        {:noreply, socket}
+      end
+    end
   end
 
   defp handle_key_event("ArrowDown", socket) do
-    # Move down in autocomplete list
-    max_pos = length(socket.assigns.functions) - 1
-    new_position = min(socket.assigns.position + 1, max_pos)
-    {:noreply, assign(socket, position: new_position)}
+    # If there are autocomplete suggestions, navigate through them
+    if length(socket.assigns.functions) > 0 do
+      max_pos = length(socket.assigns.functions) - 1
+      new_position = min(socket.assigns.position + 1, max_pos)
+      {:noreply, assign(socket, position: new_position)}
+    else
+      # Navigate through recent queries (like command history)
+      recent_queries = socket.assigns.recent_queries
+      current_pos = socket.assigns.history_position
+
+      if current_pos > 0 do
+        new_pos = current_pos - 1
+        query = Enum.at(recent_queries, new_pos)
+        {:noreply, assign(socket, query: query, history_position: new_pos)}
+      else if current_pos == 0 do
+        # Go back to empty query
+        {:noreply, assign(socket, query: "", history_position: -1)}
+      else
+        {:noreply, socket}
+      end
+      end
+    end
   end
 
   defp handle_key_event("Enter", socket) do
-    # Submit query or select from autocomplete
+    # Select from autocomplete if something is highlighted
+    # The form submit will handle the actual submission
     if socket.assigns.position >= 0 do
-      # Select highlighted function
+      # Select highlighted function and update query
       function = Enum.at(socket.assigns.functions, socket.assigns.position)
-      handle_event("submit_query", %{"query" => function}, socket)
+      # Extract the value from the function map
+      new_value = case function do
+        %{value: val} -> val
+        val when is_binary(val) -> val
+        _ -> to_string(function)
+      end
+      # Append the selected value to the existing query
+      updated_query = socket.assigns.query <> new_value
+
+      # Regenerate autocomplete suggestions based on the updated query
+      new_suggestions = case socket.assigns.input_type do
+        :search ->
+          if String.length(updated_query) >= 2 do
+            fetch_autocomplete_functions(updated_query)
+          else
+            []
+          end
+        :favourites ->
+          if String.length(updated_query) >= 2 do
+            filter_favourites(socket.assigns.favourites, updated_query)
+          else
+            socket.assigns.favourites
+          end
+      end
+
+      {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
     else
-      # Submit current query
-      handle_event("submit_query", %{"query" => socket.assigns.query}, socket)
+      # Let the form submit handle it
+      {:noreply, socket}
     end
   end
 
@@ -246,10 +491,30 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     end
   end
 
+  def format_mfa({mod, fun, arity}) when is_atom(mod) and is_atom(fun) and is_integer(arity) do
+    "#{mod}:#{fun}/#{arity}"
+  end
+
   def format_mfa(mfa) when is_list(mfa) and length(mfa) == 3 do
     [mod, fun, arity] = mfa
     "#{mod}:#{fun}/#{arity}"
   end
 
   def format_mfa(_), do: "unknown"
+
+  defp parse_mfa(mfa_str) when is_binary(mfa_str) do
+    # Parse "module:function/arity" string into {module, function, arity} tuple
+    case String.split(mfa_str, [":", "/"]) do
+      [mod_str, fun_str, arity_str] ->
+        {String.to_atom(mod_str), String.to_atom(fun_str), String.to_integer(arity_str)}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp serialize_mfa({mod, fun, arity}) do
+    # Convert MFA tuple to string for HTML attributes
+    "#{mod}:#{fun}/#{arity}"
+  end
 end
