@@ -18,7 +18,7 @@
         phx-click="toggle_trace"
         class={[
           "btn btn-sm gap-2",
-          if(@trace_status == "running", do: "btn-error", else: "btn-error")
+          if(@trace_status == "running", do: "btn-error", else: "btn-success")
         ]}
         title={if @trace_status == "running", do: "Pause tracing", else: "Start tracing"}
       >
@@ -26,8 +26,8 @@
           <.icon name="hero-pause-solid" class="w-4 h-4" />
           <span>Pause Tracing</span>
         <% else %>
-          <.icon name="hero-pause-solid" class="w-4 h-4" />
-          <span>Pause Tracing</span>
+          <.icon name="hero-play-solid" class="w-4 h-4" />
+          <span>Start Tracing</span>
         <% end %>
       </button>
 
@@ -173,11 +173,33 @@
         <%= for monitored <- @monitored_functions do %>
           <div class="card bg-base-100 shadow-xl">
             <div class="card-body">
-              <h2 class="card-title text-sm font-mono">
-                <%= format_mfa(monitored.mfa) %>
-              </h2>
-              <div class="text-xs text-base-content/70">
-                <%= monitored.query %>
+              <div class="flex items-start justify-between">
+                <div class="flex-1">
+                  <h2 class="card-title text-sm font-mono">
+                    <%= format_mfa(monitored.mfa) %>
+                  </h2>
+                  <div class="text-xs text-base-content/70">
+                    <%= monitored.query %>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <button
+                    phx-click="add_to_favourites"
+                    phx-value-query={monitored.query}
+                    class="btn btn-xs btn-ghost"
+                    title="Add to favourites"
+                  >
+                    <.icon name="hero-star" class="w-4 h-4" />
+                  </button>
+                  <button
+                    phx-click="demonitor"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-xs btn-ghost"
+                    title="Stop monitoring"
+                  >
+                    <.icon name="hero-x-mark" class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               <%!-- Statistics Table --%>
               <div class="bg-base-200 rounded-lg mt-4 overflow-hidden">
@@ -260,95 +282,67 @@
                   </div>
                 <% end %>
               </div>
-              <div class="card-actions justify-between mt-4">
-                <button
-                  phx-click="add_to_favourites"
-                  phx-value-query={monitored.query}
-                  class="btn btn-sm btn-ghost"
-                  title="Add to favourites"
-                >
-                  <.icon name="hero-star" class="w-4 h-4" />
-                </button>
-                <div class="flex gap-2">
-                  <button
-                    phx-click="start_capture"
-                    phx-value-mfa={monitored.mfa_str}
-                    class="btn btn-sm btn-ghost"
-                    title="Start capturing calls"
-                  >
-                    <.icon name="hero-play" class="w-4 h-4" />
-                    Capture
-                  </button>
-                  <button
-                    phx-click="view_capture"
-                    phx-value-mfa={monitored.mfa_str}
-                    class="btn btn-sm btn-ghost"
-                    title="View captured calls"
-                  >
-                    <.icon name="hero-document-text" class="w-4 h-4" />
-                    View
-                  </button>
+              <div class="card-actions mt-4">
+                <%= if @capture_data[monitored.mfa_str] do %>
                   <button
                     phx-click="stop_capture"
                     phx-value-mfa={monitored.mfa_str}
-                    class="btn btn-sm btn-ghost"
+                    class="btn btn-sm btn-error gap-2"
                     title="Stop capturing calls"
                   >
                     <.icon name="hero-stop" class="w-4 h-4" />
-                  </button>
-                  <button
-                    phx-click="demonitor"
-                    phx-value-mfa={monitored.mfa_str}
-                    class="btn btn-sm btn-error btn-outline"
-                    title="Stop monitoring"
-                  >
-                    <.icon name="hero-x-mark" class="w-4 h-4" />
                     Stop
                   </button>
-                </div>
+                <% else %>
+                  <button
+                    phx-click="start_capture"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-sm btn-success gap-2"
+                    title="Start capturing calls"
+                  >
+                    <.icon name="hero-play" class="w-4 h-4" />
+                    Start
+                  </button>
+                <% end %>
               </div>
 
-              <%!-- Captured Data Display --%>
+              <%!-- Captured Data Display (Collapsible) --%>
               <%= if @capture_data[monitored.mfa_str] do %>
-                <div class="mt-4 border-t pt-4">
-                  <h3 class="text-sm font-semibold mb-3"><%= monitored.mfa_str %> - Slow calls tracing</h3>
-                  <% capture = @capture_data[monitored.mfa_str] %>
-
-                  <%!-- Capture Controls --%>
-                  <div class="flex items-center gap-4 mb-4">
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm font-medium">Threshold</label>
-                      <input
-                        type="number"
-                        value={capture.spec.threshold}
-                        class="input input-sm input-bordered w-20"
-                        disabled
-                      />
-                      <span class="text-sm">ms</span>
-                    </div>
-
-                    <div class="flex items-center gap-2">
-                      <label class="text-sm font-medium">Limit</label>
-                      <input
-                        type="number"
-                        value={capture.spec.limit}
-                        class="input input-sm input-bordered w-20"
-                        disabled
-                      />
-                      <span class="text-sm">calls</span>
-                    </div>
-
-                    <button
-                      phx-click="stop_capture"
-                      phx-value-mfa={monitored.mfa_str}
-                      class="btn btn-sm btn-error"
-                    >
-                      Stop
-                    </button>
+                <div class="collapse collapse-arrow bg-base-200 mt-4">
+                  <input type="checkbox" checked />
+                  <div class="collapse-title text-sm font-semibold">
+                    <%= monitored.mfa_str %> - Slow calls tracing
                   </div>
+                  <div class="collapse-content">
+                    <% capture = @capture_data[monitored.mfa_str] %>
 
-                  <%!-- Captured Calls Table --%>
-                  <div class="overflow-x-auto">
+                    <%!-- Capture Controls --%>
+                    <div class="flex items-center gap-4 mb-4">
+                      <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium">Threshold</label>
+                        <input
+                          type="number"
+                          value={capture.spec.threshold}
+                          class="input input-sm input-bordered w-20"
+                          disabled
+                        />
+                        <span class="text-sm">ms</span>
+                      </div>
+
+                      <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium">Limit</label>
+                        <input
+                          type="number"
+                          value={capture.spec.limit}
+                          class="input input-sm input-bordered w-20"
+                          disabled
+                        />
+                        <span class="text-sm">calls</span>
+                      </div>
+                    </div>
+
+                    <%!-- Captured Calls Table --%>
+                    <div class="overflow-x-auto">
                     <table class="table table-xs">
                       <thead>
                         <tr>
@@ -376,6 +370,7 @@
                         No calls captured yet
                       </div>
                     <% end %>
+                  </div>
                   </div>
                 </div>
               <% end %>

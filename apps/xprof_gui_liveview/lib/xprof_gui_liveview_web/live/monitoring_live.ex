@@ -686,6 +686,47 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     end
   end
 
+  defp handle_key_event("Tab", socket) do
+    # Complete longest common prefix from suggestions
+    if length(socket.assigns.functions) > 0 do
+      # Get all suggestion values
+      values = Enum.map(socket.assigns.functions, fn
+        %{value: val} -> val
+        val when is_binary(val) -> val
+        _ -> ""
+      end)
+
+      # Find longest common prefix
+      prefix = longest_common_prefix(values)
+
+      if prefix != "" and String.length(prefix) > String.length(socket.assigns.query) do
+        # Update query with the common prefix
+        updated_query = case socket.assigns.input_type do
+          :favourites -> prefix
+          :search -> prefix
+        end
+
+        # Regenerate suggestions based on new query
+        new_suggestions = case socket.assigns.input_type do
+          :search ->
+            if String.length(updated_query) >= 2 do
+              fetch_autocomplete_functions(updated_query)
+            else
+              []
+            end
+          :favourites ->
+            filter_favourites(socket.assigns.favourites, updated_query)
+        end
+
+        {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
+      else
+        {:noreply, socket}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
   defp handle_key_event("Enter", socket) do
     # Select from autocomplete if something is highlighted
     # The form submit will handle the actual submission
@@ -726,6 +767,24 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
 
   defp handle_key_event(_key, socket) do
     {:noreply, socket}
+  end
+
+  # Find longest common prefix of a list of strings
+  defp longest_common_prefix([]), do: ""
+  defp longest_common_prefix([single]), do: single
+  defp longest_common_prefix(strings) do
+    first = hd(strings)
+    rest = tl(strings)
+
+    String.graphemes(first)
+    |> Enum.reduce_while("", fn char, acc ->
+      new_prefix = acc <> char
+      if Enum.all?(rest, &String.starts_with?(&1, new_prefix)) do
+        {:cont, new_prefix}
+      else
+        {:halt, acc}
+      end
+    end)
   end
 
   # Template helper functions
