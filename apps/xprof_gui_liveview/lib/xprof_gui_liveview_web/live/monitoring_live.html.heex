@@ -201,88 +201,33 @@
                   </button>
                 </div>
               </div>
-              <%!-- Statistics Table --%>
+              <%!-- Graph Display --%>
               <div class="bg-base-200 rounded-lg mt-4 overflow-hidden">
-                <%= if monitored.stats do %>
-                  <div class="overflow-x-auto">
-                    <table class="table table-xs table-pin-rows">
-                      <thead>
-                        <tr>
-                          <th class="bg-base-300">Metric</th>
-                          <th class="bg-base-300 text-right">Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <%= if monitored.stats[:count] do %>
-                          <tr>
-                            <td class="font-semibold">Count</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:count] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:min] do %>
-                          <tr>
-                            <td>Min (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:min] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:mean] do %>
-                          <tr>
-                            <td>Mean (μs)</td>
-                            <td class="text-right font-mono"><%= Float.round(monitored.stats[:mean] / 1, 2) %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:median] do %>
-                          <tr>
-                            <td>Median (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:median] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:p50] do %>
-                          <tr>
-                            <td>P50 (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:p50] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:p75] do %>
-                          <tr>
-                            <td>P75 (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:p75] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:p90] do %>
-                          <tr>
-                            <td>P90 (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:p90] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:p99] do %>
-                          <tr>
-                            <td>P99 (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:p99] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:max] do %>
-                          <tr>
-                            <td>Max (μs)</td>
-                            <td class="text-right font-mono"><%= monitored.stats[:max] %></td>
-                          </tr>
-                        <% end %>
-                        <%= if monitored.stats[:time] do %>
-                          <tr class="text-xs opacity-60">
-                            <td>Last Update</td>
-                            <td class="text-right font-mono"><%= format_timestamp(monitored.stats[:time]) %></td>
-                          </tr>
-                        <% end %>
-                      </tbody>
-                    </table>
+                <%= if @charts[monitored.mfa_str] do %>
+                  <div class="p-4">
+                    <div
+                      id={"chart-#{monitored.mfa_str |> String.replace([":", "/"], "-")}"}
+                      phx-hook="ApexChart"
+                      data-chart={Jason.encode!(@charts[monitored.mfa_str])}
+                    >
+                    </div>
                   </div>
                 <% else %>
-                  <div class="flex items-center justify-center h-32">
-                    <span class="text-base-content/50 text-sm">No data yet...</span>
+                  <div class="flex items-center justify-center h-64">
+                    <span class="text-base-content/50 text-sm">Loading graph data...</span>
                   </div>
                 <% end %>
               </div>
-              <div class="card-actions mt-4">
+
+
+              <%!-- Capture Section (Collapsible) --%>
+              <div class="collapse collapse-arrow bg-base-200 mt-4">
+                <input type="checkbox" />
+                <div class="collapse-title text-sm font-semibold">
+                  Slow Calls Tracing
+                </div>
+                <div class="collapse-content">
+                  <div class="card-actions mb-4">
                 <%= if @capture_data[monitored.mfa_str] do %>
                   <button
                     phx-click="stop_capture"
@@ -306,14 +251,8 @@
                 <% end %>
               </div>
 
-              <%!-- Captured Data Display (Collapsible) --%>
+              <%!-- Captured Data Display --%>
               <%= if @capture_data[monitored.mfa_str] do %>
-                <div class="collapse collapse-arrow bg-base-200 mt-4">
-                  <input type="checkbox" checked />
-                  <div class="collapse-title text-sm font-semibold">
-                    <%= monitored.mfa_str %> - Slow calls tracing
-                  </div>
-                  <div class="collapse-content">
                     <% capture = @capture_data[monitored.mfa_str] %>
 
                     <%!-- Capture Controls --%>
@@ -371,9 +310,9 @@
                       </div>
                     <% end %>
                   </div>
-                  </div>
-                </div>
               <% end %>
+                </div>
+              </div>
             </div>
           </div>
         <% end %>

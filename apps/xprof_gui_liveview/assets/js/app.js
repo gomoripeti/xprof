@@ -39,6 +39,26 @@ Hooks.AutoHideFlash = {
   }
 }
 
+// ApexCharts hook for rendering time-series graphs
+Hooks.ApexChart = {
+  mounted() {
+    const chartData = JSON.parse(this.el.dataset.chart)
+    this.chart = new ApexCharts(this.el, chartData)
+    this.chart.render()
+  },
+  updated() {
+    const chartData = JSON.parse(this.el.dataset.chart)
+    if (this.chart) {
+      this.chart.updateOptions(chartData, false, true)
+    }
+  },
+  destroyed() {
+    if (this.chart) {
+      this.chart.destroy()
+    }
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,

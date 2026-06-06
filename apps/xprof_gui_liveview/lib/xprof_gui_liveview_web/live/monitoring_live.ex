@@ -10,6 +10,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       :timer.send_interval(2000, self(), :update_functions)
       :timer.send_interval(1000, self(), :update_captures)
       :timer.send_interval(30000, self(), :update_favourites)
+      :timer.send_interval(2000, self(), :update_graphs)
     end
 
     {:ok,
@@ -26,6 +27,9 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
      |> assign(:favourites, [])
      |> assign(:recent_queries, [])
      |> assign(:capture_data, %{})
+     |> assign(:graph_data, %{})
+     |> assign(:last_timestamps, %{})
+     |> assign(:charts, %{})
      |> fetch_initial_data()}
   end
 
@@ -91,6 +95,16 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           :ok ->
             monitored = fetch_monitored_functions()
 
+            # Initialize graph data for newly monitored function
+            new_charts =
+              Enum.reduce(monitored, socket.assigns.charts, fn mon, charts ->
+                if Map.has_key?(charts, mon.mfa_str) do
+                  charts
+                else
+                  Map.put(charts, mon.mfa_str, build_chart_for_function(mon.mfa_str))
+                end
+              end)
+
             {:noreply,
              socket
              |> assign(
@@ -98,7 +112,8 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
                functions: [],
                monitored_functions: monitored,
                recent_queries: updated_recent,
-               history_position: -1
+               history_position: -1,
+               charts: new_charts
              )
              |> put_flash(:info, "Started monitoring: #{validated_query}")}
 
@@ -128,9 +143,18 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     case demonitor_function(mfa) do
       :ok ->
         monitored = fetch_monitored_functions()
+        updated_graph_data = Map.delete(socket.assigns.graph_data, mfa_str)
+        updated_timestamps = Map.delete(socket.assigns.last_timestamps, mfa_str)
+        updated_charts = Map.delete(socket.assigns.charts, mfa_str)
+
         {:noreply,
          socket
-         |> assign(monitored_functions: monitored)
+         |> assign(
+           monitored_functions: monitored,
+           graph_data: updated_graph_data,
+           last_timestamps: updated_timestamps,
+           charts: updated_charts
+         )
          |> put_flash(:info, "Stopped monitoring: #{format_mfa(mfa)}")}
 
       {:error, reason} ->
@@ -342,6 +366,68 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
     {:noreply, assign(socket, capture_data: updated_capture_data)}
   end
 
+  @impl true
+  def handle_info(:update_graphs, socket) do
+    monitored_mfas = Enum.map(socket.assigns.monitored_functions, & &1.mfa)
+
+    {updated_graph_data, updated_timestamps, updated_charts} =
+      Enum.reduce(
+        monitored_mfas,
+        {socket.assigns.graph_data, socket.assigns.last_timestamps, socket.assigns.charts},
+        fn mfa, {graph_acc, ts_acc, chart_acc} ->
+          mfa_str = serialize_mfa(mfa)
+          last_ts = Map.get(ts_acc, mfa_str, 0)
+
+          case fetch_graph_data(mfa, last_ts) do
+            {:ok, new_data, new_timestamp} when map_size(new_data) > 0 ->
+              existing_data =
+                Map.get(graph_acc, mfa_str, %{count: [], mean: [], min: [], p99: []})
+
+              # Maintain 5-minute rolling window (300 points)
+              merged_data = %{
+                count: maintain_rolling_window(existing_data.count ++ new_data.count, 300),
+                mean: maintain_rolling_window(existing_data.mean ++ new_data.mean, 300),
+                min: maintain_rolling_window(existing_data.min ++ new_data.min, 300),
+                p99: maintain_rolling_window(existing_data.p99 ++ new_data.p99, 300)
+              }
+
+              chart = Map.get(chart_acc, mfa_str)
+
+              updated_chart =
+                if chart do
+                  %{
+                    chart
+                    | series: [
+                        %{name: "Min", data: merged_data.min},
+                        %{name: "Mean", data: merged_data.mean},
+                        %{name: "P99", data: merged_data.p99},
+                        %{name: "Count", data: merged_data.count}
+                      ]
+                  }
+                else
+                  build_chart_for_function(mfa_str)
+                end
+
+              {
+                Map.put(graph_acc, mfa_str, merged_data),
+                Map.put(ts_acc, mfa_str, new_timestamp),
+                Map.put(chart_acc, mfa_str, updated_chart)
+              }
+
+            _ ->
+              {graph_acc, ts_acc, chart_acc}
+          end
+        end
+      )
+
+    {:noreply,
+     assign(socket,
+       graph_data: updated_graph_data,
+       last_timestamps: updated_timestamps,
+       charts: updated_charts
+     )}
+  end
+
   # Private functions for API calls to xprof_core
 
   defp fetch_initial_data(socket) do
@@ -429,6 +515,107 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   defp format_stats_snapshot(_), do: nil
+
+  defp fetch_graph_data(mfa, last_timestamp) when is_tuple(mfa) do
+    try do
+      case :xprof_core.get_data_pp(mfa, last_timestamp) do
+        {:error, :not_found} ->
+          {:ok, [], last_timestamp}
+
+        data when is_list(data) ->
+          transformed_data = transform_graph_data(data)
+
+          new_timestamp =
+            case List.last(data) do
+              nil -> last_timestamp
+              last_item -> :proplists.get_value(:time, last_item, last_timestamp)
+            end
+
+          {:ok, transformed_data, new_timestamp}
+
+        _ ->
+          {:ok, [], last_timestamp}
+      end
+    rescue
+      e ->
+        Logger.error("Failed to fetch graph data for #{inspect(mfa)}: #{inspect(e)}")
+        {:ok, [], last_timestamp}
+    end
+  end
+
+  defp fetch_graph_data(_mfa, last_timestamp), do: {:ok, [], last_timestamp}
+
+  defp transform_graph_data(data) when is_list(data) do
+    # Transform Erlang proplists to ApexCharts format
+    Enum.reduce(data, %{count: [], mean: [], min: [], p99: []}, fn snapshot, acc ->
+      time = :proplists.get_value(:time, snapshot, 0)
+      timestamp_ms = time * 1000
+
+      count = :proplists.get_value(:count, snapshot, 0)
+      mean = :proplists.get_value(:mean, snapshot, 0)
+      min = :proplists.get_value(:min, snapshot, 0)
+      p99 = :proplists.get_value(:p99, snapshot, 0)
+
+      %{
+        count: acc.count ++ [%{x: timestamp_ms, y: count}],
+        mean: acc.mean ++ [%{x: timestamp_ms, y: mean}],
+        min: acc.min ++ [%{x: timestamp_ms, y: min}],
+        p99: acc.p99 ++ [%{x: timestamp_ms, y: p99}]
+      }
+    end)
+  end
+
+  defp transform_graph_data(_), do: %{count: [], mean: [], min: [], p99: []}
+
+  defp build_chart_for_function(_mfa_str) do
+    %{
+      chart: %{
+        type: "line",
+        height: 300,
+        animations: %{enabled: false},
+        toolbar: %{show: false}
+      },
+      series: [
+        %{name: "Min", data: []},
+        %{name: "Mean", data: []},
+        %{name: "P99", data: []},
+        %{name: "Count", data: []}
+      ],
+      stroke: %{width: 2, curve: "smooth"},
+      colors: ["#D3D004", "#FFAA00", "#E24806", "#98FB98"],
+      xaxis: %{
+        type: "datetime",
+        labels: %{format: "HH:mm:ss"}
+      },
+      yaxis: [
+        %{
+          seriesName: "Min",
+          title: %{text: "Time"},
+          min: 0,
+          showAlways: true
+        },
+        %{seriesName: "Mean", show: false},
+        %{seriesName: "P99", show: false},
+        %{
+          seriesName: "Count",
+          opposite: true,
+          title: %{text: "Count"},
+          min: 0,
+          showAlways: true
+        }
+      ],
+      legend: %{position: "top", horizontalAlign: "left"},
+      tooltip: %{shared: true, x: %{format: "HH:mm:ss"}}
+    }
+  end
+
+  defp maintain_rolling_window(data_points, max_size) when is_list(data_points) do
+    if length(data_points) > max_size do
+      Enum.take(data_points, -max_size)
+    else
+      data_points
+    end
+  end
 
   defp fetch_favourites do
     # Get favourites from ETS-based store
