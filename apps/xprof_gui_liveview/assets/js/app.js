@@ -138,7 +138,9 @@ Hooks.ApexChart = {
     if (Array.isArray(chartData.yaxis)) {
       chartData.yaxis = chartData.yaxis.map(axis => {
         if (axis.seriesName === "Count") {
-          return { ...axis, labels: { formatter: val => Math.round(val) } }
+          // Only label integer ticks; return '' for fractional positions so ApexCharts
+          // never shows duplicate labels (e.g. two "1"s) when the count range is small.
+          return { ...axis, labels: { formatter: val => Number.isInteger(val) ? val : '' } }
         } else if (axis.show !== false) {
           return { ...axis, labels: { formatter: formatTime } }
         }

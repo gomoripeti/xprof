@@ -447,6 +447,11 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
 
   @impl true
   def handle_info(:update_graphs, socket) do
+    # When tracing is paused xprof_core trace handlers still write zero-count ETS entries
+    # every second, so timestamps keep advancing. Freeze the graph server-side instead.
+    if socket.assigns.trace_status != "running" do
+      {:noreply, socket}
+    else
     monitored_mfas = Enum.map(socket.assigns.monitored_functions, & &1.mfa)
 
     {updated_graph_data, updated_timestamps, updated_charts} =
@@ -505,6 +510,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
        last_timestamps: updated_timestamps,
        charts: updated_charts
      )}
+    end
   end
 
   # Private functions for API calls to xprof_core
@@ -656,7 +662,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
         %{name: "P99", data: []},
         %{name: "Count", data: []}
       ],
-      stroke: %{width: 2, curve: "smooth"},
+      stroke: %{width: 2, curve: "straight"},
       colors: ["#D3D004", "#FFAA00", "#E24806", "#98FB98"],
       xaxis: %{
         type: "datetime",
@@ -677,8 +683,6 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           opposite: true,
           title: %{text: "Count"},
           min: 0,
-          decimalsInFloat: 0,
-          forceNiceScale: true,
           showAlways: true
         }
       ],
