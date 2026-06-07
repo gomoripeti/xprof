@@ -358,7 +358,10 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           []  # Clear suggestions after selecting a favourite
       end
 
-      {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
+      {:noreply,
+       socket
+       |> assign(query: updated_query, functions: new_suggestions, position: -1)
+       |> push_event("set_query", %{value: updated_query})}
     else
       {:noreply, socket}
     end
@@ -627,8 +630,13 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   defp fetch_graph_data(_mfa, last_timestamp), do: {:ok, [], last_timestamp}
 
   defp transform_graph_data(data) when is_list(data) do
-    # Transform Erlang proplists to ApexCharts format
-    Enum.reduce(data, %{count: [], mean: [], min: [], p99: []}, fn snapshot, acc ->
+    # Transform Erlang proplists to ApexCharts format.
+    # xprof_core reads snapshots from a `set` ETS table, so they come back in
+    # unspecified order. ApexCharts connects line points in array order, so we
+    # must sort by timestamp here or the line zig-zags (criss-crosses).
+    data
+    |> Enum.sort_by(fn snapshot -> :proplists.get_value(:time, snapshot, 0) end)
+    |> Enum.reduce(%{count: [], mean: [], min: [], p99: []}, fn snapshot, acc ->
       time = :proplists.get_value(:time, snapshot, 0)
       timestamp_ms = time * 1000
 
@@ -923,7 +931,10 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           ""
         end
 
-        {:noreply, assign(socket, query: query, history_position: new_pos)}
+        {:noreply,
+         socket
+         |> assign(query: query, history_position: new_pos)
+         |> push_event("set_query", %{value: query})}
       else
         {:noreply, socket}
       end
@@ -944,10 +955,16 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       if current_pos > 0 do
         new_pos = current_pos - 1
         query = Enum.at(recent_queries, new_pos)
-        {:noreply, assign(socket, query: query, history_position: new_pos)}
+        {:noreply,
+         socket
+         |> assign(query: query, history_position: new_pos)
+         |> push_event("set_query", %{value: query})}
       else if current_pos == 0 do
         # Go back to empty query
-        {:noreply, assign(socket, query: "", history_position: -1)}
+        {:noreply,
+         socket
+         |> assign(query: "", history_position: -1)
+         |> push_event("set_query", %{value: ""})}
       else
         {:noreply, socket}
       end
@@ -982,7 +999,10 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           :favourites ->
             filter_favourites(socket.assigns.favourites, updated_query)
         end
-        {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
+        {:noreply,
+         socket
+         |> assign(query: updated_query, functions: new_suggestions, position: -1)
+         |> push_event("set_query", %{value: updated_query})}
       else
         {:noreply, socket}
       end
@@ -1022,7 +1042,10 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           []  # Clear suggestions after selecting a favourite
       end
 
-      {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
+      {:noreply,
+       socket
+       |> assign(query: updated_query, functions: new_suggestions, position: -1)
+       |> push_event("set_query", %{value: updated_query})}
     else
       # Let the form submit handle it
       {:noreply, socket}

@@ -89,7 +89,7 @@
               autocomplete="off"
               id="query-input"
               data-position={@position}
-              data-has-suggestions={length(@functions) > 0}
+              data-has-suggestions={to_string(length(@functions) > 0)}
               phx-hook="SearchInput"
             />
           </form>

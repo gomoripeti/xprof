@@ -58,6 +58,11 @@ Hooks.AutoHideFlash = {
 // Prevent Tab/Arrow/Enter browser defaults on the search input when suggestions are active
 Hooks.SearchInput = {
   mounted() {
+    // The server computes the autocompleted query, but LiveView won't overwrite
+    // the value of the focused input on a diff — so it pushes it to us explicitly.
+    this.handleEvent("set_query", ({value}) => {
+      this.el.value = value
+    })
     this.el.addEventListener("keydown", e => {
       const hasSuggestions = this.el.dataset.hasSuggestions === "true"
       const hasSelection = parseInt(this.el.dataset.position) >= 0
