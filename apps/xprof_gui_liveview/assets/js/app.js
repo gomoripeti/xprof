@@ -104,11 +104,24 @@ Hooks.ApexChart = {
     this.chart.render()
   },
   updated() {
-    // Only update series data — preserves formatters and chart options set at mount
+    if (!this.chart) return
     const chartData = JSON.parse(this.el.dataset.chart)
-    if (this.chart) {
-      this.chart.updateSeries(chartData.series, false)
+    this._applyFormatters(chartData)
+
+    // Compute explicit x-axis bounds from the actual data timestamps so the visible
+    // window is always anchored to the last data point, not to the system clock.
+    // When tracing is paused, no new points arrive, so maxX stays fixed → chart freezes.
+    const allX = chartData.series
+      .flatMap(s => (s.data || []).map(p => p.x))
+      .filter(x => x > 0)
+
+    if (allX.length > 0) {
+      const maxX = Math.max(...allX)
+      chartData.xaxis = { ...chartData.xaxis, min: maxX - 120_000, max: maxX }
+      delete chartData.xaxis.range
     }
+
+    this.chart.updateOptions(chartData, false, false)
   },
   destroyed() {
     if (this.chart) {

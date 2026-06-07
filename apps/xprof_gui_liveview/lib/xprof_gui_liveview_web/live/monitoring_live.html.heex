@@ -104,7 +104,7 @@
                   <a
                     phx-click="select_function"
                     phx-value-index={index}
-                    class={if @position == index, do: "active"}
+                    class={if @position == index, do: "bg-primary text-primary-content", else: ""}
                   >
                     <code class="text-xs"><%= func.label || func.value %></code>
                   </a>
