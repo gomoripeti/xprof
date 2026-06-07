@@ -88,6 +88,9 @@
               name="query"
               autocomplete="off"
               id="query-input"
+              data-position={@position}
+              data-has-suggestions={length(@functions) > 0}
+              phx-hook="SearchInput"
             />
           </form>
         </div>
@@ -116,6 +119,7 @@
       <div class="dropdown dropdown-end">
         <label
           tabindex="0"
+          phx-keydown="switch_grid_key"
           class="btn btn-sm border-0 transition-colors"
           style="background-color: #95a5a6; color: #fff;"
           onmouseover="this.style.backgroundColor='#798d8f'"
@@ -229,7 +233,11 @@
 
 
               <%!-- Capture Section (Collapsible) --%>
-              <div class="collapse collapse-arrow bg-base-200 mt-4">
+              <div
+                id={"capture-#{monitored.mfa_str |> String.replace([":", "/"], "-")}"}
+                class="collapse collapse-arrow bg-base-200 mt-4"
+                phx-hook="Collapse"
+              >
                 <input type="checkbox" />
                 <div class="collapse-title text-sm font-semibold">
                   Slow Calls Tracing
@@ -371,9 +379,18 @@
         <%= if @callees.list == [] do %>
           <p class="text-sm opacity-60 text-center py-4">No callees found (function may not be loaded or has no static call references).</p>
         <% else %>
+          <p class="text-xs opacity-60 mb-2">Click a function to start monitoring it.</p>
           <ul class="space-y-1 max-h-80 overflow-y-auto">
             <%= for callee <- @callees.list do %>
-              <li class="font-mono text-sm bg-base-200 rounded px-3 py-1.5"><%= callee %></li>
+              <li>
+                <button
+                  phx-click="monitor_callee"
+                  phx-value-query={callee}
+                  class="font-mono text-sm bg-base-200 hover:bg-base-300 rounded px-3 py-1.5 w-full text-left transition-colors cursor-pointer"
+                >
+                  <%= callee %>
+                </button>
+              </li>
             <% end %>
           </ul>
         <% end %>

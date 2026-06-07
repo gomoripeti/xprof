@@ -231,6 +231,44 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   @impl true
+  def handle_event("switch_grid_key", %{"key" => "ArrowDown"}, socket) do
+    {:noreply, assign(socket, grid: min(socket.assigns.grid + 1, 4))}
+  end
+
+  def handle_event("switch_grid_key", %{"key" => "ArrowUp"}, socket) do
+    {:noreply, assign(socket, grid: max(socket.assigns.grid - 1, 1))}
+  end
+
+  def handle_event("switch_grid_key", %{"key" => key}, socket) when key in ["1", "2", "3", "4"] do
+    {:noreply, assign(socket, grid: String.to_integer(key))}
+  end
+
+  def handle_event("switch_grid_key", _, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_event("monitor_callee", %{"query" => query}, socket) do
+    case monitor_function(query) do
+      :ok ->
+        monitored = fetch_monitored_functions()
+        new_charts =
+          Enum.reduce(monitored, socket.assigns.charts, fn mon, charts ->
+            if Map.has_key?(charts, mon.mfa_str), do: charts,
+              else: Map.put(charts, mon.mfa_str, build_chart_for_function(mon.mfa_str))
+          end)
+        {:noreply,
+         socket
+         |> assign(monitored_functions: monitored, callees: nil, charts: new_charts)
+         |> put_flash(:info, "Started monitoring: #{query}")}
+
+      {:error, :already_traced} ->
+        {:noreply, socket |> assign(callees: nil) |> put_flash(:info, "Already being monitored")}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to monitor: #{inspect(reason)}")}
+    end
+  end
+
+  @impl true
   def handle_event("start_capture", %{"mfa" => mfa_str} = params, socket) do
     mfa = parse_mfa(mfa_str)
     threshold = params |> Map.get("threshold", "0") |> parse_non_neg_integer(0)
@@ -424,12 +462,12 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
               existing_data =
                 Map.get(graph_acc, mfa_str, %{count: [], mean: [], min: [], p99: []})
 
-              # Maintain 5-minute rolling window (300 points)
+              # Maintain 2-minute rolling window (120 points at 1 sample/s)
               merged_data = %{
-                count: maintain_rolling_window(existing_data.count ++ new_data.count, 300),
-                mean: maintain_rolling_window(existing_data.mean ++ new_data.mean, 300),
-                min: maintain_rolling_window(existing_data.min ++ new_data.min, 300),
-                p99: maintain_rolling_window(existing_data.p99 ++ new_data.p99, 300)
+                count: maintain_rolling_window(existing_data.count ++ new_data.count, 120),
+                mean: maintain_rolling_window(existing_data.mean ++ new_data.mean, 120),
+                min: maintain_rolling_window(existing_data.min ++ new_data.min, 120),
+                p99: maintain_rolling_window(existing_data.p99 ++ new_data.p99, 120)
               }
 
               chart = Map.get(chart_acc, mfa_str)
@@ -622,12 +660,13 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       colors: ["#D3D004", "#FFAA00", "#E24806", "#98FB98"],
       xaxis: %{
         type: "datetime",
+        range: 120_000,
         labels: %{format: "HH:mm:ss"}
       },
       yaxis: [
         %{
           seriesName: "Min",
-          title: %{text: "Time"},
+          title: %{text: "Time (µs)"},
           min: 0,
           showAlways: true
         },
@@ -638,6 +677,8 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           opposite: true,
           title: %{text: "Count"},
           min: 0,
+          decimalsInFloat: 0,
+          forceNiceScale: true,
           showAlways: true
         }
       ],
@@ -911,26 +952,22 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   defp handle_key_event("Tab", socket) do
-    # Complete longest common prefix from suggestions
     if length(socket.assigns.functions) > 0 do
-      # Get all suggestion values
       values = Enum.map(socket.assigns.functions, fn
         %{value: val} -> val
         val when is_binary(val) -> val
         _ -> ""
       end)
 
-      # Find longest common prefix
       prefix = longest_common_prefix(values)
 
-      if prefix != "" and String.length(prefix) > String.length(socket.assigns.query) do
-        # Update query with the common prefix
-        updated_query = case socket.assigns.input_type do
-          :favourites -> prefix
-          :search -> prefix
-        end
+      # In search mode, suggestions are tails to append; in favourites mode they are full names
+      updated_query = case socket.assigns.input_type do
+        :favourites -> prefix
+        :search -> socket.assigns.query <> prefix
+      end
 
-        # Regenerate suggestions based on new query
+      if prefix != "" and updated_query != socket.assigns.query do
         new_suggestions = case socket.assigns.input_type do
           :search ->
             if String.length(updated_query) >= 2 do
@@ -941,7 +978,6 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
           :favourites ->
             filter_favourites(socket.assigns.favourites, updated_query)
         end
-
         {:noreply, assign(socket, query: updated_query, functions: new_suggestions, position: -1)}
       else
         {:noreply, socket}

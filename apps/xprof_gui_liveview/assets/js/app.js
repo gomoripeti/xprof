@@ -55,22 +55,92 @@ Hooks.AutoHideFlash = {
   }
 }
 
+// Prevent Tab/Arrow/Enter browser defaults on the search input when suggestions are active
+Hooks.SearchInput = {
+  mounted() {
+    this.el.addEventListener("keydown", e => {
+      const hasSuggestions = this.el.dataset.hasSuggestions === "true"
+      const hasSelection = parseInt(this.el.dataset.position) >= 0
+
+      if (e.key === "Tab" && hasSuggestions) {
+        e.preventDefault()
+      }
+      if ((e.key === "ArrowUp" || e.key === "ArrowDown") && hasSuggestions) {
+        e.preventDefault()
+      }
+      // Prevent form submit when a suggestion is highlighted; let key_down handler accept it
+      if (e.key === "Enter" && hasSelection) {
+        e.preventDefault()
+      }
+    })
+  }
+}
+
+// Preserve collapse open/closed state across LiveView patches
+Hooks.Collapse = {
+  mounted() {
+    this.input = this.el.querySelector('input[type="checkbox"]')
+    this.isOpen = false
+    if (this.input) {
+      this.input.addEventListener('change', () => {
+        this.isOpen = this.input.checked
+      })
+    }
+  },
+  updated() {
+    const input = this.el.querySelector('input[type="checkbox"]')
+    if (input && this.isOpen) {
+      input.checked = true
+    }
+  }
+}
+
 // ApexCharts hook for rendering time-series graphs
 Hooks.ApexChart = {
   mounted() {
     const chartData = JSON.parse(this.el.dataset.chart)
+    this._applyFormatters(chartData)
     this.chart = new ApexCharts(this.el, chartData)
     this.chart.render()
   },
   updated() {
+    // Only update series data — preserves formatters and chart options set at mount
     const chartData = JSON.parse(this.el.dataset.chart)
     if (this.chart) {
-      this.chart.updateOptions(chartData, false, true)
+      this.chart.updateSeries(chartData.series, false)
     }
   },
   destroyed() {
     if (this.chart) {
       this.chart.destroy()
+    }
+  },
+  _applyFormatters(chartData) {
+    const formatTime = val => {
+      if (val >= 1_000_000) return (val / 1_000_000).toFixed(2) + 's'
+      if (val >= 1_000) return (val / 1_000).toFixed(1) + 'ms'
+      return Math.round(val) + 'µs'
+    }
+
+    if (Array.isArray(chartData.yaxis)) {
+      chartData.yaxis = chartData.yaxis.map(axis => {
+        if (axis.seriesName === "Count") {
+          return { ...axis, labels: { formatter: val => Math.round(val) } }
+        } else if (axis.show !== false) {
+          return { ...axis, labels: { formatter: formatTime } }
+        }
+        return axis
+      })
+    }
+
+    chartData.tooltip = {
+      ...(chartData.tooltip || {}),
+      y: {
+        formatter: (val, { seriesIndex }) => {
+          if (seriesIndex === 3) return Math.round(val) // Count series (index 3)
+          return formatTime(val)
+        }
+      }
     }
   }
 }
