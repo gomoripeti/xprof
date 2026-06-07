@@ -373,6 +373,39 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   @impl true
+  def handle_event("capture_more", %{"mfa" => mfa_str}, socket) do
+    capture_data = socket.assigns.capture_data
+
+    updated =
+      case Map.get(capture_data, mfa_str) do
+        nil -> capture_data
+        capture -> Map.put(capture_data, mfa_str, %{capture | visible: capture.visible + 20})
+      end
+
+    {:noreply, assign(socket, capture_data: updated)}
+  end
+
+  @impl true
+  def handle_event("show_callees", %{"mfa" => mfa_str}, socket) do
+    mfa = parse_mfa(mfa_str)
+
+    callees =
+      try do
+        funs = :xprof_core.get_called_funs_pp(mfa)
+        %{mfa_str: mfa_str, list: Enum.map(funs, &to_string/1)}
+      rescue
+        _ -> %{mfa_str: mfa_str, list: []}
+      end
+
+    {:noreply, assign(socket, callees: callees)}
+  end
+
+  @impl true
+  def handle_event("hide_callees", _params, socket) do
+    {:noreply, assign(socket, callees: nil)}
+  end
+
+  @impl true
   def handle_info(:update_status, socket) do
     status = fetch_trace_status()
     {:noreply, assign(socket, trace_status: status)}
@@ -413,39 +446,6 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       |> Map.new()
 
     {:noreply, assign(socket, capture_data: updated_capture_data)}
-  end
-
-  @impl true
-  def handle_event("capture_more", %{"mfa" => mfa_str}, socket) do
-    capture_data = socket.assigns.capture_data
-
-    updated =
-      case Map.get(capture_data, mfa_str) do
-        nil -> capture_data
-        capture -> Map.put(capture_data, mfa_str, %{capture | visible: capture.visible + 20})
-      end
-
-    {:noreply, assign(socket, capture_data: updated)}
-  end
-
-  @impl true
-  def handle_event("show_callees", %{"mfa" => mfa_str}, socket) do
-    mfa = parse_mfa(mfa_str)
-
-    callees =
-      try do
-        funs = :xprof_core.get_called_funs_pp(mfa)
-        %{mfa_str: mfa_str, list: Enum.map(funs, &to_string/1)}
-      rescue
-        _ -> %{mfa_str: mfa_str, list: []}
-      end
-
-    {:noreply, assign(socket, callees: callees)}
-  end
-
-  @impl true
-  def handle_event("hide_callees", _params, socket) do
-    {:noreply, assign(socket, callees: nil)}
   end
 
   @impl true
