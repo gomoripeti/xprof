@@ -24,6 +24,22 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/xprof_gui_liveview"
 import topbar from "../vendor/topbar"
+import ApexCharts from "../vendor/apexcharts"
+
+// Global keyboard shortcuts (lives here so it survives LiveView reconnects)
+document.addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "i") {
+    e.preventDefault()
+    const btn = document.querySelector('[phx-click="toggle_input_type"]:not([disabled])')
+    if (btn) btn.click()
+  }
+})
+
+// Auto-focus query input after LiveView navigations
+window.addEventListener("phx:page-loading-stop", () => {
+  const input = document.getElementById("query-input")
+  if (input) input.focus()
+})
 
 const Hooks = {}
 

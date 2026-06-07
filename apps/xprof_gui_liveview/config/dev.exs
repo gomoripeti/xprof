@@ -46,16 +46,9 @@ config :xprof_gui_liveview, XprofGuiLiveviewWeb.Endpoint,
 # Reload browser tabs when matching files change.
 config :xprof_gui_liveview, XprofGuiLiveviewWeb.Endpoint,
   live_reload: [
-    web_console_logger: true,
-    patterns: [
-      # Static assets, except user uploads
-      ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$",
-      # Gettext translations
-      ~r"priv/gettext/.*\.po$",
-      # Router, Controllers, LiveViews and LiveComponents
-      ~r"lib/xprof_gui_liveview_web/router\.ex$",
-      ~r"lib/xprof_gui_liveview_web/(controllers|live|components)/.*\.(ex|heex)$"
-    ]
+    web_console_logger: true
+    # OTP 28: ~r sigil creates %Regex{re_pattern: #Reference<...>} which Elixir 1.17
+    # cannot escape. Upgrade to Elixir 1.18+ to restore pattern-specific reload triggers.
   ]
 
 # Enable dev routes for dashboard and mailbox

@@ -333,24 +333,3 @@
     </div>
   </footer>
 </div>
-
-<script>
-  // Handle keyboard shortcuts
-  document.addEventListener('keydown', function(e) {
-    // Ctrl+I to toggle input type
-    if (e.ctrlKey && e.key === 'i') {
-      e.preventDefault();
-      // Find the inactive button (not disabled) and click it to switch modes
-      const activeBtn = document.querySelector('[phx-click="toggle_input_type"]:not([disabled])');
-      if (activeBtn) {
-        activeBtn.click();
-      }
-    }
-  });
-
-  // Auto-focus query input on page load
-  window.addEventListener('phx:page-loading-stop', () => {
-    const input = document.getElementById('query-input');
-    if (input) input.focus();
-  });
-</script>

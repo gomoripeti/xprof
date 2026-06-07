@@ -439,31 +439,27 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   defp fetch_mode do
-    # Call xprof_core to get the mode (erlang/elixir)
     try do
       case :xprof_core.get_mode() do
-        {:ok, mode} -> Atom.to_string(mode)
+        mode when mode in [:erlang, :elixir] -> Atom.to_string(mode)
         _ -> "unknown"
       end
     rescue
-      e ->
-        Logger.error("Failed to fetch mode: #{inspect(e)}")
-        "unknown"
+      _ -> "unknown"
     end
   end
 
   defp fetch_trace_status do
-    # Call xprof_core to get trace status
     try do
       case :xprof_core.get_trace_status() do
-        {:ok, :running} -> "running"
-        {:ok, :paused} -> "paused"
+        {_, :running} -> "running"
+        {_, :paused} -> "paused"
+        {_, :initialized} -> "paused"
+        {_, :overflow} -> "running"
         _ -> "paused"
       end
     rescue
-      e ->
-        Logger.error("Failed to fetch trace status: #{inspect(e)}")
-        "paused"
+      _ -> "paused"
     end
   end
 
