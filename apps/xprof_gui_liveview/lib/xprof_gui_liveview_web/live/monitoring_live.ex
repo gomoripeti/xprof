@@ -237,7 +237,16 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
 
     case start_capture(mfa, threshold, limit) do
       {:ok, _capture_id} ->
-        {:noreply, put_flash(socket, :info, "Started capturing calls for #{format_mfa(mfa)}")}
+        # Immediately seed capture_data so the periodic updater starts polling
+        capture_data =
+          case fetch_captured_data(mfa, 0) do
+            {:ok, spec, items} ->
+              Map.put(socket.assigns.capture_data, mfa_str, %{spec: spec, items: items, visible: 20})
+            _ ->
+              socket.assigns.capture_data
+          end
+
+        {:noreply, socket |> assign(:capture_data, capture_data) |> put_flash(:info, "Started capturing calls for #{format_mfa(mfa)}")}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to start capture: #{inspect(reason)}")}
@@ -263,10 +272,11 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   def handle_event("view_capture", %{"mfa" => mfa_str}, socket) do
     mfa = parse_mfa(mfa_str)
 
-    # Fetch captured data and store in socket state
     case fetch_captured_data(mfa, 0) do
       {:ok, spec, items} ->
-        capture_data = Map.put(socket.assigns.capture_data, mfa_str, %{spec: spec, items: items})
+        existing = socket.assigns.capture_data[mfa_str]
+        visible = if existing, do: existing.visible, else: 20
+        capture_data = Map.put(socket.assigns.capture_data, mfa_str, %{spec: spec, items: items, visible: visible})
         {:noreply, assign(socket, capture_data: capture_data)}
 
       {:error, :not_found} ->
@@ -347,22 +357,33 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
 
   @impl true
   def handle_info(:update_captures, socket) do
-    # Update all active captures with fresh data
     updated_capture_data =
       socket.assigns.capture_data
-      |> Enum.map(fn {mfa_str, _current_data} ->
+      |> Enum.map(fn {mfa_str, current} ->
         mfa = parse_mfa(mfa_str)
         case fetch_captured_data(mfa, 0) do
           {:ok, spec, items} ->
-            {mfa_str, %{spec: spec, items: items}}
+            {mfa_str, %{spec: spec, items: items, visible: current.visible}}
           {:error, _reason} ->
-            # Keep existing data if fetch fails
-            {mfa_str, socket.assigns.capture_data[mfa_str]}
+            {mfa_str, current}
         end
       end)
       |> Map.new()
 
     {:noreply, assign(socket, capture_data: updated_capture_data)}
+  end
+
+  @impl true
+  def handle_event("capture_more", %{"mfa" => mfa_str}, socket) do
+    capture_data = socket.assigns.capture_data
+
+    updated =
+      case Map.get(capture_data, mfa_str) do
+        nil -> capture_data
+        capture -> Map.put(capture_data, mfa_str, %{capture | visible: capture.visible + 20})
+      end
+
+    {:noreply, assign(socket, capture_data: updated)}
   end
 
   @impl true

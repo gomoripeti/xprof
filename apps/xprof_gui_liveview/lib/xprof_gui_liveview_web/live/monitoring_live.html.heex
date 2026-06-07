@@ -312,7 +312,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        <%= for item <- capture.items do %>
+                        <%= for item <- Enum.take(capture.items, capture.visible) do %>
                           <tr>
                             <td><%= item.id %></td>
                             <td><%= item.call_time %> µs</td>
@@ -326,6 +326,17 @@
                     <%= if length(capture.items) == 0 do %>
                       <div class="text-center py-8 text-sm opacity-50">
                         No calls captured yet
+                      </div>
+                    <% end %>
+                    <%= if length(capture.items) > capture.visible do %>
+                      <div class="text-center mt-2">
+                        <button
+                          phx-click="capture_more"
+                          phx-value-mfa={monitored.mfa_str}
+                          class="btn btn-xs btn-ghost"
+                        >
+                          Load more ({length(capture.items) - capture.visible} remaining)
+                        </button>
                       </div>
                     <% end %>
                   </div>

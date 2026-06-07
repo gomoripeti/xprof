@@ -485,6 +485,36 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
     end
   end
 
+  describe "MonitoringLive capture pagination" do
+    test "load more button absent when no captured items", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      html = render(view)
+      refute html =~ "Load more"
+    end
+
+    test "start_capture immediately seeds capture_data without crashing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      html =
+        view
+        |> element("form[phx-submit='start_capture']")
+        |> render_submit(%{"mfa" => "Elixir.Enum:map/2", "threshold" => "0", "limit" => "100"})
+
+      assert html =~ "XProf"
+    end
+
+    test "capture_more event is a no-op when mfa not in capture_data", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Trigger capture_more for an MFA that has no capture active — must not crash
+      assert Phoenix.LiveViewTest.render_hook(view, "capture_more", %{"mfa" => "Elixir.Enum:map/2"}) =~
+               "XProf"
+    end
+  end
+
   describe "MonitoringLive search vs favourites mode query handling" do
     test "search mode appends, favourites mode replaces (logic verification)", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")

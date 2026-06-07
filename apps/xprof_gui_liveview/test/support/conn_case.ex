@@ -32,6 +32,11 @@ defmodule XprofGuiLiveviewWeb.ConnCase do
   end
 
   setup _tags do
+    # Clean up any functions monitored in previous tests so xprof_core state is fresh
+    for {mfa, _query} <- :xprof_core.get_all_monitored() do
+      :xprof_core.demonitor(mfa)
+    end
+
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end
