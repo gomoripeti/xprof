@@ -227,7 +227,7 @@
                   Slow Calls Tracing
                 </div>
                 <div class="collapse-content">
-                  <div class="card-actions mb-4">
+                  <div class="mb-4">
                 <%= if @capture_data[monitored.mfa_str] do %>
                   <button
                     phx-click="stop_capture"
@@ -239,15 +239,34 @@
                     Stop
                   </button>
                 <% else %>
-                  <button
-                    phx-click="start_capture"
-                    phx-value-mfa={monitored.mfa_str}
-                    class="btn btn-sm btn-success gap-2"
-                    title="Start capturing calls"
-                  >
-                    <.icon name="hero-play" class="w-4 h-4" />
-                    Start
-                  </button>
+                  <form phx-submit="start_capture" class="flex items-center gap-2">
+                    <input type="hidden" name="mfa" value={monitored.mfa_str} />
+                    <label class="text-xs font-medium">Threshold</label>
+                    <input
+                      type="number"
+                      name="threshold"
+                      value="0"
+                      min="0"
+                      class="input input-xs w-16"
+                      title="Minimum call duration to capture (ms)"
+                    />
+                    <span class="text-xs">ms</span>
+                    <label class="text-xs font-medium ml-2">Limit</label>
+                    <input
+                      type="number"
+                      name="limit"
+                      value="100"
+                      min="1"
+                      max="10000"
+                      class="input input-xs w-16"
+                      title="Maximum number of calls to capture"
+                    />
+                    <span class="text-xs">calls</span>
+                    <button type="submit" class="btn btn-xs btn-success gap-1 ml-1">
+                      <.icon name="hero-play" class="w-3 h-3" />
+                      Start
+                    </button>
+                  </form>
                 <% end %>
               </div>
 

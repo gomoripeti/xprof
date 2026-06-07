@@ -230,15 +230,14 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   @impl true
-  def handle_event("start_capture", %{"mfa" => mfa_str}, socket) do
+  def handle_event("start_capture", %{"mfa" => mfa_str} = params, socket) do
     mfa = parse_mfa(mfa_str)
+    threshold = params |> Map.get("threshold", "0") |> parse_non_neg_integer(0)
+    limit = params |> Map.get("limit", "100") |> parse_non_neg_integer(100)
 
-    # Start capture with default threshold (0ms) and limit (100 calls)
-    case start_capture(mfa, 0, 100) do
-      {:ok, capture_id} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Started capturing calls for #{format_mfa(mfa)} (ID: #{capture_id})")}
+    case start_capture(mfa, threshold, limit) do
+      {:ok, _capture_id} ->
+        {:noreply, put_flash(socket, :info, "Started capturing calls for #{format_mfa(mfa)}")}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Failed to start capture: #{inspect(reason)}")}
@@ -1027,7 +1026,13 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   end
 
   defp serialize_mfa({mod, fun, arity}) do
-    # Convert MFA tuple to string for HTML attributes
     "#{mod}:#{fun}/#{arity}"
+  end
+
+  defp parse_non_neg_integer(str, default) when is_binary(str) do
+    case Integer.parse(str) do
+      {n, ""} when n >= 0 -> n
+      _ -> default
+    end
   end
 end

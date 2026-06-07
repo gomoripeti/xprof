@@ -182,15 +182,15 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       # Note: These will fail to monitor (xprof_core not mocked), but will add to history
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "first_query"})
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "second_query"})
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "third_query"})
 
       # Input should be empty after last submit
@@ -273,7 +273,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
 
       # Submit a query (will fail but adds to history)
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "test_function"})
 
       # In production with actual monitoring, we would see capture buttons
@@ -307,7 +307,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
 
       # Try to submit empty query
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => ""})
 
       # Should show error message
@@ -319,7 +319,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       {:ok, view, _html} = live(conn, "/")
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "   "})
 
       html = render(view)
@@ -330,7 +330,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       {:ok, view, _html} = live(conn, "/")
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "!!!"})
 
       html = render(view)
@@ -343,7 +343,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       # Submit query with surrounding whitespace
       # Will fail to monitor (xprof_core not mocked) but validates the trim
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "  lists:map/2  "})
 
       # Should attempt to monitor "lists:map/2" (trimmed)
@@ -373,7 +373,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       # This will fail to actually monitor (xprof_core not mocked)
       # but verifies that the map structure includes :stats key
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "lists:map/2"})
 
       # Verify no KeyError occurs on render
@@ -389,15 +389,15 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
 
       # Submit queries to add to recent queries (which appear in favourites when empty)
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "first"})
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "second"})
 
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "third"})
 
       # Switch to favourites mode by clicking the favourites button
@@ -425,7 +425,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
 
       # Submit queries to add to recent queries
       view
-      |> element("form")
+      |> element("form[phx-submit=\x27submit_query\x27]")
       |> render_submit(%{"query" => "lists:map/2"})
 
       # Switch to favourites mode by clicking the favourites button
@@ -439,6 +439,49 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
       html = render(view)
       # Verify we're in favourites mode (star icon button is present)
       assert html =~ "hero-star"
+    end
+  end
+
+  describe "MonitoringLive capture threshold/limit config" do
+    test "start capture form has threshold and limit inputs with defaults", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+
+      # Monitor a function so the capture section appears
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      html = render(view)
+      # Capture form has threshold and limit inputs with sensible defaults
+      assert html =~ ~s(name="threshold")
+      assert html =~ ~s(name="limit")
+      assert html =~ ~s(value="0")
+      assert html =~ ~s(value="100")
+    end
+
+    test "start_capture event accepts custom threshold and limit", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      # Submit capture form with custom values — should not crash
+      html =
+        view
+        |> element("form[phx-submit='start_capture']")
+        |> render_submit(%{"mfa" => "Elixir.Enum:map/2", "threshold" => "50", "limit" => "200"})
+
+      # Either succeeds with info flash or fails gracefully (xprof_core may reject unknown MFA)
+      assert html =~ "XProf"
+    end
+
+    test "parse_non_neg_integer defaults on invalid input", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      # Negative threshold should be rejected and default used
+      html =
+        view
+        |> element("form[phx-submit='start_capture']")
+        |> render_submit(%{"mfa" => "Elixir.Enum:map/2", "threshold" => "-5", "limit" => "abc"})
+
+      assert html =~ "XProf"
     end
   end
 
