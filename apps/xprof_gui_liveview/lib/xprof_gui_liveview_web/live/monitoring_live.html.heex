@@ -192,6 +192,14 @@
                     <.icon name="hero-star" class="w-4 h-4" />
                   </button>
                   <button
+                    phx-click="show_callees"
+                    phx-value-mfa={monitored.mfa_str}
+                    class="btn btn-xs btn-ghost"
+                    title="Show called functions"
+                  >
+                    <.icon name="hero-arrow-right-circle" class="w-4 h-4" />
+                  </button>
+                  <button
                     phx-click="demonitor"
                     phx-value-mfa={monitored.mfa_str}
                     class="btn btn-xs btn-ghost"
@@ -349,6 +357,29 @@
       </div>
     <% end %>
   </main>
+
+  <%!-- Callees Modal --%>
+  <%= if @callees do %>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" phx-click="hide_callees">
+      <div class="bg-base-100 rounded-xl shadow-2xl w-full max-w-lg mx-4 p-6" phx-click-away="hide_callees">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold">Functions called by <code class="font-mono text-sm"><%= @callees.mfa_str %></code></h3>
+          <button phx-click="hide_callees" class="btn btn-xs btn-ghost">
+            <.icon name="hero-x-mark" class="w-4 h-4" />
+          </button>
+        </div>
+        <%= if @callees.list == [] do %>
+          <p class="text-sm opacity-60 text-center py-4">No callees found (function may not be loaded or has no static call references).</p>
+        <% else %>
+          <ul class="space-y-1 max-h-80 overflow-y-auto">
+            <%= for callee <- @callees.list do %>
+              <li class="font-mono text-sm bg-base-200 rounded px-3 py-1.5"><%= callee %></li>
+            <% end %>
+          </ul>
+        <% end %>
+      </div>
+    </div>
+  <% end %>
 
   <%!-- Footer --%>
   <footer class="footer footer-center p-4 bg-base-300 text-base-content">

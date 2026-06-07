@@ -30,6 +30,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
      |> assign(:graph_data, %{})
      |> assign(:last_timestamps, %{})
      |> assign(:charts, %{})
+     |> assign(:callees, nil)
      |> fetch_initial_data()}
   end
 
@@ -384,6 +385,26 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
       end
 
     {:noreply, assign(socket, capture_data: updated)}
+  end
+
+  @impl true
+  def handle_event("show_callees", %{"mfa" => mfa_str}, socket) do
+    mfa = parse_mfa(mfa_str)
+
+    callees =
+      try do
+        funs = :xprof_core.get_called_funs_pp(mfa)
+        %{mfa_str: mfa_str, list: Enum.map(funs, &to_string/1)}
+      rescue
+        _ -> %{mfa_str: mfa_str, list: []}
+      end
+
+    {:noreply, assign(socket, callees: callees)}
+  end
+
+  @impl true
+  def handle_event("hide_callees", _params, socket) do
+    {:noreply, assign(socket, callees: nil)}
   end
 
   @impl true

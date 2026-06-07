@@ -515,6 +515,45 @@ defmodule XprofGuiLiveviewWeb.MonitoringLiveTest do
     end
   end
 
+  describe "MonitoringLive callees modal" do
+    test "show_callees button appears on monitored function cards", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      html = render(view)
+      assert html =~ "show_callees"
+      assert html =~ "hero-arrow-right-circle"
+    end
+
+    test "show_callees event opens modal with mfa_str", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      html =
+        view
+        |> element("button[phx-click='show_callees']")
+        |> render_click()
+
+      assert html =~ "Functions called by"
+    end
+
+    test "hide_callees event closes modal", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/")
+      view |> element("form[phx-submit='submit_query']") |> render_submit(%{"query" => "Enum.map/2"})
+
+      view |> element("button[phx-click='show_callees']") |> render_click()
+      assert render(view) =~ "Functions called by"
+
+      html = view |> element("button[phx-click='hide_callees']") |> render_click()
+      refute html =~ "Functions called by"
+    end
+
+    test "callees modal absent on initial render", %{conn: conn} do
+      {:ok, _view, html} = live(conn, "/")
+      refute html =~ "Functions called by"
+    end
+  end
+
   describe "MonitoringLive search vs favourites mode query handling" do
     test "search mode appends, favourites mode replaces (logic verification)", %{conn: conn} do
       {:ok, view, _html} = live(conn, "/")
