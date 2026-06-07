@@ -57,7 +57,7 @@ defmodule XprofGuiLiveviewWeb.CoreComponents do
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       phx-hook={if @kind == :info, do: "AutoHideFlash"}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="toast toast-bottom toast-end z-50"
       {@rest}
     >
       <div class={[

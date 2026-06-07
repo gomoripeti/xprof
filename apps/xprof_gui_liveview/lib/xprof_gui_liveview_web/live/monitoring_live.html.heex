@@ -120,6 +120,7 @@
         <label
           tabindex="0"
           phx-keydown="switch_grid_key"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur()}"
           class="btn btn-sm border-0 transition-colors"
           style="background-color: #95a5a6; color: #fff;"
           onmouseover="this.style.backgroundColor='#798d8f'"
@@ -130,7 +131,12 @@
         <ul tabindex="0" class="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32 text-base-content">
           <%= for grid_size <- [1, 2, 3, 4] do %>
             <li>
-              <a phx-click="switch_grid" phx-value-grid={grid_size} class={if @grid == grid_size, do: "active"}>
+              <a
+                phx-click="switch_grid"
+                phx-value-grid={grid_size}
+                onclick="document.activeElement.blur()"
+                class={if @grid == grid_size, do: "active bg-primary text-primary-content"}
+              >
                 <%= grid_size %> column<%= if grid_size > 1, do: "s" %>
               </a>
             </li>
