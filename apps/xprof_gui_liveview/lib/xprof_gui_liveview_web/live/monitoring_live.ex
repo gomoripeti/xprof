@@ -272,7 +272,7 @@ defmodule XprofGuiLiveviewWeb.MonitoringLive do
   def handle_event("start_capture", %{"mfa" => mfa_str} = params, socket) do
     mfa = parse_mfa(mfa_str)
     threshold = params |> Map.get("threshold", "0") |> parse_non_neg_integer(0)
-    limit = params |> Map.get("limit", "100") |> parse_non_neg_integer(100)
+    limit = params |> Map.get("limit", "3") |> parse_non_neg_integer(3)
 
     case start_capture(mfa, threshold, limit) do
       {:ok, _capture_id} ->
